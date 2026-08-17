@@ -8,6 +8,7 @@ enum class CatalogDestination {
     Slider,
     BottomTabs,
     Dialog,
+    DropdownMenu,
 
     LockScreen,
     ControlCenter,

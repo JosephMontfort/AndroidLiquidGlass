@@ -47,6 +47,7 @@ fun HomeContent(onNavigate: (CatalogDestination) -> Unit) {
             ListItem({ onNavigate(CatalogDestination.Slider) }, "Slider")
             ListItem({ onNavigate(CatalogDestination.BottomTabs) }, "Bottom tabs")
             ListItem({ onNavigate(CatalogDestination.Dialog) }, "Dialog")
+            ListItem({ onNavigate(CatalogDestination.DropdownMenu) }, "Dropdown menu")
 
             Subtitle("System UIs")
             ListItem({ onNavigate(CatalogDestination.LockScreen) }, "Lock screen (SDF texture)")
