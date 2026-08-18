@@ -143,7 +143,7 @@ enum class MenuAnimationPreset(val label: String) {
 }
 
 @Composable
-fun ExpandableGlassMenuContent() {
+fun FlippedMorphDropdownContent() {
     val isLightTheme = !isSystemInDarkTheme()
     val contentColor = if (isLightTheme) Color.Black else Color.White
     val secondaryColor = if (isLightTheme) Color.Gray else Color(0xFFAAAAAA)
@@ -177,7 +177,7 @@ fun ExpandableGlassMenuContent() {
             verticalArrangement = Arrangement.spacedBy(16f.dp)
         ) {
             BasicText(
-                "Expandable Glass Menu",
+                "Flipped Morph Dropdown",
                 Modifier.padding(top = 16f.dp, bottom = 4f.dp),
                 style = TextStyle(contentColor, 26f.sp, FontWeight.SemiBold)
             )
@@ -714,6 +714,7 @@ fun GlassEffectContainer(
                 scaleX = lerp(jellySx, expandedSx, progress)
                 scaleY = lerp(jellySy, expandedSy, progress)
                 
+                rotationX = 180f * progress
                 this.transformOrigin = transformOrigin
             }
             .drawBackdrop(
@@ -760,6 +761,7 @@ fun GlassEffectContainer(
                     alpha = contentProgress
                     scaleX = contentScale
                     scaleY = contentScale
+                    rotationX = 180f * progress
                     this.transformOrigin = transformOrigin
                 }
         ) {
