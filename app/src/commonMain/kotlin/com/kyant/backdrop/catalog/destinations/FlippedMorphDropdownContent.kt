@@ -71,6 +71,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.toSize
 import androidx.compose.ui.util.fastCoerceAtMost
 import androidx.compose.ui.util.lerp
 import com.kyant.backdrop.Backdrop
@@ -382,10 +383,8 @@ fun FlippedExpandableGlassMenu(
                                     upEvent.consume()
                                     val target = if (isCurrentlyExpanded) 0f else 1f
                                     animationScope.launch { animatableProgress.animateTo(target, animationPreset.getSpec(isClosing = target == 0f)) }
-                                } else if ((isSimpleDrag || isLongPress) && isCurrentlyExpanded) {
-                                    if (finalHoveredIndex != null || dragOffset.getDistance() > 20f) {
-                                        closeMenu()
-                                    }
+                                } else if (finalHoveredIndex != null || dragOffset.getDistance() > 20f) {
+                                    closeMenu()
                                 }
                                 
                                 dragOffset = Offset.Zero
