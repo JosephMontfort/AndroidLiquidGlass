@@ -458,7 +458,7 @@ fun GlassEffectContainer(
             modifier = Modifier
                 // Critical: This breaks the parent boundaries to measure its full, 
                 // native size matching SwiftUI's `.fixedSize()` modifier logic.
-                .wrapContentSize(unbounded = true, alignment = alignment.composeAlignment) 
+                .wrapContentSize(unbounded = true, align = alignment.composeAlignment) 
                 .graphicsLayer {
                     alpha = contentOpacity
                     scaleX = contentScale
