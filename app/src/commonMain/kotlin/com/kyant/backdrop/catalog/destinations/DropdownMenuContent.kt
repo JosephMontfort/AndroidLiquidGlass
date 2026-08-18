@@ -33,6 +33,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -119,8 +120,9 @@ enum class MenuAnimationPreset(val label: String) {
     Smooth("Smooth"),
     Snappy("Snappy");
 
-    fun getSpec(): AnimationSpec<Float> = when (this) {
-        Bouncy -> spring(dampingRatio = 0.65f, stiffness = 250f)
+    // Dynamic specification based on whether the menu is actively closing
+    fun getSpec(isClosing: Boolean = false): AnimationSpec<Float> = when (this) {
+        Bouncy -> if (isClosing) spring(dampingRatio = 0.8f, stiffness = 300f) else spring(dampingRatio = 0.65f, stiffness = 250f)
         Smooth -> tween(durationMillis = 650, easing = FastOutSlowInEasing)
         Snappy -> spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow)
     }
@@ -137,7 +139,6 @@ fun ExpandableGlassMenuContent() {
     var selectedPreset by remember { mutableStateOf(MenuAnimationPreset.Bouncy) }
 
     val animationScope = rememberCoroutineScope()
-    // By keeping Animatable as the absolute source of truth, we prevent double-coroutine cancellation bugs
     val animatableProgress = remember { Animatable(0f) }
 
     BackdropDemoScaffold { backdrop ->
@@ -160,18 +161,18 @@ fun ExpandableGlassMenuContent() {
 
             BasicText("Preview", style = TextStyle(Color(0xFF0088FF), 15f.sp, FontWeight.Medium))
 
-            // Catch outside taps to dismiss
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(340f.dp)
                     .clip(RoundedCornerShape(20f.dp))
                     .background(Color.Black.copy(alpha = 0.08f))
-                    .pointerInput(Unit) {
+                    // Re-keys gesture detection if the preset changes
+                    .pointerInput(selectedPreset) {
                         detectTapGestures {
                             if (animatableProgress.value > 0.1f) {
                                 animationScope.launch {
-                                    animatableProgress.animateTo(0f, selectedPreset.getSpec())
+                                    animatableProgress.animateTo(0f, selectedPreset.getSpec(isClosing = true))
                                 }
                             }
                         }
@@ -198,13 +199,15 @@ fun ExpandableGlassMenuContent() {
                             )
                         }
                     }
-                ) { globalTouch, closeMenu ->
+                ) { globalTouch, closeMenu, hoveredIndex, setHovered ->
                     MenuRow(
                         icon = Icons.Send,
                         title = "Send",
                         description = "This is a sample text description",
                         contentColor = contentColor,
                         secondaryColor = secondaryColor,
+                        isHovered = hoveredIndex == 0,
+                        onHover = { setHovered(0) },
                         globalTouchPosition = globalTouch,
                         onClick = closeMenu
                     )
@@ -214,6 +217,8 @@ fun ExpandableGlassMenuContent() {
                         description = "This is a sample text description",
                         contentColor = contentColor,
                         secondaryColor = secondaryColor,
+                        isHovered = hoveredIndex == 1,
+                        onHover = { setHovered(1) },
                         globalTouchPosition = globalTouch,
                         onClick = closeMenu
                     )
@@ -223,6 +228,8 @@ fun ExpandableGlassMenuContent() {
                         description = "This is a sample text description",
                         contentColor = contentColor,
                         secondaryColor = secondaryColor,
+                        isHovered = hoveredIndex == 2,
+                        onHover = { setHovered(2) },
                         globalTouchPosition = globalTouch,
                         onClick = closeMenu
                     )
@@ -296,7 +303,7 @@ fun ExpandableGlassMenuContent() {
                                     selectedPreset = preset
                                     val target = if (animatableProgress.value > 0.5f) 0f else 1f
                                     animationScope.launch {
-                                        animatableProgress.animateTo(target, preset.getSpec())
+                                        animatableProgress.animateTo(target, preset.getSpec(isClosing = target == 0f))
                                     }
                                 },
                                 backdrop = controlsBackdrop,
@@ -328,7 +335,7 @@ fun ExpandableGlassMenu(
     cornerRadius: Dp = 30f.dp,
     labelSize: Size = Size(55f, 55f),
     label: @Composable () -> Unit,
-    content: @Composable (globalTouchPosition: Offset, closeMenu: () -> Unit) -> Unit
+    content: @Composable (globalTouchPosition: Offset, closeMenu: () -> Unit, hoveredIndex: Int?, setHovered: (Int) -> Unit) -> Unit
 ) {
     val density = LocalDensity.current
     val viewConfiguration = LocalViewConfiguration.current
@@ -338,13 +345,21 @@ fun ExpandableGlassMenu(
     var dragOffset by remember { mutableStateOf(Offset.Zero) }
     var globalTouchPosition by remember { mutableStateOf(Offset.Unspecified) }
     var labelCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    
+    var hoveredIndex by remember { mutableStateOf<Int?>(null) }
+    val setHovered: (Int) -> Unit = { hoveredIndex = it }
 
     val labelSizePx = with(density) { Size(labelSize.width.dp.toPx(), labelSize.height.dp.toPx()) }
 
     val closeMenu: () -> Unit = {
+        hoveredIndex = null
         animationScope.launch {
-            animatableProgress.animateTo(0f, animationPreset.getSpec())
+            animatableProgress.animateTo(0f, animationPreset.getSpec(isClosing = true))
         }
+    }
+
+    LaunchedEffect(animatableProgress.value) {
+        if (animatableProgress.value == 0f) hoveredIndex = null
     }
 
     Box(
@@ -364,60 +379,65 @@ fun ExpandableGlassMenu(
                     modifier = Modifier
                         .size(with(density) { labelSizePx.width.toDp() })
                         .onGloballyPositioned { labelCoordinates = it }
-                        .pointerInput(Unit) {
+                        .pointerInput(animationPreset) {
                             awaitEachGesture {
                                 val down = awaitFirstDown(requireUnconsumed = false)
                                 val downPos = down.position
                                 val tapTimeout = viewConfiguration.longPressTimeoutMillis
                                 
-                                val upEvent = withTimeoutOrNull(tapTimeout) {
-                                    var up: androidx.compose.ui.input.pointer.PointerInputChange? = null
-                                    while (up == null) {
+                                var isLongPress = false
+                                var isSimpleDrag = false
+                                var upEvent: androidx.compose.ui.input.pointer.PointerInputChange? = null
+                                
+                                val timeoutResult = withTimeoutOrNull(tapTimeout) {
+                                    while (true) {
                                         val event = awaitPointerEvent(PointerEventPass.Main)
                                         val change = event.changes.firstOrNull()
                                         if (change != null) {
                                             if (!change.pressed) {
-                                                up = change
+                                                upEvent = change
+                                                break
                                             } else if ((change.position - downPos).getDistance() > viewConfiguration.touchSlop) {
-                                                break // Broken out! This immediately kicks off the drag expansion block below
+                                                isSimpleDrag = true
+                                                break // Broken out before timeout = simple drag jelly effect!
                                             }
                                         }
                                     }
-                                    up
+                                    true
                                 }
 
-                                if (upEvent != null) {
-                                    // Trigger Tap Expansion/Collapse
-                                    upEvent.consume()
+                                if (timeoutResult == null) {
+                                    isLongPress = true
+                                    animationScope.launch {
+                                        animatableProgress.animateTo(1f, animationPreset.getSpec(isClosing = false))
+                                    }
+                                }
+
+                                var tracking = upEvent == null
+                                while (tracking) {
+                                    val event = awaitPointerEvent(PointerEventPass.Main)
+                                    val change = event.changes.firstOrNull()
+                                    if (change == null || !change.pressed) {
+                                        tracking = false
+                                    } else {
+                                        dragOffset = change.position - downPos
+                                        if (isLongPress) {
+                                            globalTouchPosition = labelCoordinates?.localToWindow(change.position) ?: Offset.Unspecified
+                                        }
+                                        change.consume()
+                                    }
+                                }
+
+                                if (upEvent != null && !isSimpleDrag && !isLongPress) {
+                                    upEvent?.consume()
                                     val target = if (animatableProgress.value > 0.5f) 0f else 1f
                                     animationScope.launch {
-                                        animatableProgress.animateTo(target, animationPreset.getSpec())
+                                        animatableProgress.animateTo(target, animationPreset.getSpec(isClosing = target == 0f))
                                     }
-                                } else {
-                                    // Trigger Long Press / Immediate Drag Expansion
-                                    animationScope.launch {
-                                        animatableProgress.animateTo(1f, animationPreset.getSpec())
-                                    }
-                                    
-                                    var tracking = true
-                                    while (tracking) {
-                                        val event = awaitPointerEvent(PointerEventPass.Main)
-                                        val change = event.changes.firstOrNull()
-                                        if (change == null || !change.pressed) {
-                                            tracking = false
-                                        } else {
-                                            dragOffset = change.position - downPos
-                                            globalTouchPosition = labelCoordinates?.localToWindow(change.position) ?: Offset.Unspecified
-                                            change.consume()
-                                        }
-                                    }
-                                    
-                                    // Close on release if an actual drag action occurred
-                                    if (dragOffset.getDistance() > 20f) {
-                                        closeMenu()
-                                    }
-                                    
-                                    dragOffset = Offset.Zero
+                                }
+                                
+                                dragOffset = Offset.Zero
+                                if (isLongPress) {
                                     globalTouchPosition = Offset.Unspecified
                                 }
                             }
@@ -437,7 +457,7 @@ fun ExpandableGlassMenu(
                         .padding(10f.dp),
                     verticalArrangement = Arrangement.spacedBy(12f.dp)
                 ) {
-                    content(globalTouchPosition, closeMenu)
+                    content(globalTouchPosition, closeMenu, hoveredIndex, setHovered)
                 }
             }
         )
@@ -484,13 +504,13 @@ fun GlassEffectContainer(
     val animatedDragX by animateFloatAsState(dragOffset.x, spring(stiffness = 400f, dampingRatio = 0.6f))
     val animatedDragY by animateFloatAsState(dragOffset.y, spring(stiffness = 400f, dampingRatio = 0.6f))
 
-    val stretchY = 1f + abs(animatedDragY) * 0.0005f
-    val stretchX = 1f - abs(animatedDragY) * 0.0003f
+    // Organically limiting squish/stretch with coerceIn (5% Limit Expansion)
+    val stretchX = (1f + abs(animatedDragX) * 0.0003f - abs(animatedDragY) * 0.0003f).coerceIn(0.95f, 1.05f)
+    val stretchY = (1f + abs(animatedDragY) * 0.0003f - abs(animatedDragX) * 0.0003f).coerceIn(0.95f, 1.05f)
 
     Box(
         modifier = Modifier
             .graphicsLayer {
-                // Inverted translation so dragging pulls the container in the exact opposite direction!
                 translationX = -animatedDragX * 0.05f
                 translationY = offsetY - animatedDragY * 0.05f
                 scaleX = squishScale * stretchX
@@ -552,16 +572,22 @@ fun MenuRow(
     description: String,
     contentColor: Color,
     secondaryColor: Color,
+    isHovered: Boolean,
+    onHover: () -> Unit,
     globalTouchPosition: Offset,
     onClick: () -> Unit
 ) {
     var rowCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
     
-    val isHovered = remember(globalTouchPosition, rowCoords) {
+    val contains = remember(globalTouchPosition, rowCoords) {
         if (globalTouchPosition.isUnspecified || rowCoords == null) false
         else rowCoords!!.boundsInWindow().contains(globalTouchPosition)
     }
     
+    LaunchedEffect(contains) {
+        if (contains) onHover()
+    }
+
     val hoverAlpha by animateFloatAsState(if (isHovered) 0.1f else 0f, tween(150))
 
     Row(
