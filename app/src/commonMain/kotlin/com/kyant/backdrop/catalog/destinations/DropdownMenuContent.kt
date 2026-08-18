@@ -530,7 +530,7 @@ fun GlassEffectContainer(
     ) {
         Box(
             modifier = Modifier
-                .wrapContentSize(unbounded = true, alignment = alignment.composeAlignment) 
+                .wrapContentSize(unbounded = true, align = alignment.composeAlignment) 
                 .graphicsLayer {
                     alpha = contentProgress
                     scaleX = contentScale
