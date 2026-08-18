@@ -47,6 +47,7 @@ import androidx.compose.ui.draw.paint
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.isUnspecified
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.SolidColor
@@ -69,6 +70,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.toSize
+import androidx.compose.ui.util.lerp
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.kyant.backdrop.catalog.BackdropDemoScaffold
@@ -85,7 +87,12 @@ import com.kyant.backdrop.shadow.Shadow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.abs
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.sin
+import kotlin.math.tanh
 
 enum class MenuAlignment(val label: String) {
     TopLeading("T-Left"),
@@ -139,7 +146,6 @@ fun ExpandableGlassMenuContent() {
     var selectedAlignment by remember { mutableStateOf(MenuAlignment.TopLeading) }
     var selectedPreset by remember { mutableStateOf(MenuAnimationPreset.Bouncy) }
 
-    // Glass properties state
     var isGlassEnabled by remember { mutableStateOf(true) }
     var cornerRadiusDp by remember { mutableFloatStateOf(30f) }
     var blurRadiusDp by remember { mutableFloatStateOf(12f) }
@@ -334,7 +340,6 @@ fun ExpandableGlassMenuContent() {
                     }
                 }
 
-                // Glass Effects Section
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     BasicText("Glass Effect", style = TextStyle(contentColor, 14f.sp))
                     LiquidToggle(
@@ -620,41 +625,48 @@ fun GlassEffectContainer(
 
     val animatedDragX by animateFloatAsState(dragOffset.x, spring(stiffness = 400f, dampingRatio = 0.6f))
     val animatedDragY by animateFloatAsState(dragOffset.y, spring(stiffness = 400f, dampingRatio = 0.6f))
-
-    // 1. Collapsed Physics (LiquidButton native jelly pull)
-    val jellyMaxOffset = with(density) { 55f.dp.toPx() }
-    val initialDerivative = 0.05f
-    val jellyTx = jellyMaxOffset * kotlin.math.tanh(initialDerivative * animatedDragX / jellyMaxOffset)
-    val jellyTy = jellyMaxOffset * kotlin.math.tanh(initialDerivative * animatedDragY / jellyMaxOffset)
     
-    val jellyDragScale = with(density) { 4f.dp.toPx() / 55f.dp.toPx() }
-    val jellyAngle = kotlin.math.atan2(animatedDragY, animatedDragX)
-    val jellySx = 1f + jellyDragScale * abs(kotlin.math.cos(jellyAngle) * animatedDragX / jellyMaxOffset)
-    val jellySy = 1f + jellyDragScale * abs(kotlin.math.sin(jellyAngle) * animatedDragY / jellyMaxOffset)
-
-    // 2. Expanded Physics (Menu tight pull resistance)
-    val stretchTx = -animatedDragX * 0.05f
-    val stretchTy = -animatedDragY * 0.05f
-    val stretchSx = (1f + abs(animatedDragX) * 0.00005f - abs(animatedDragY) * 0.00005f).coerceIn(0.99f, 1.01f)
-    val stretchSy = (1f + abs(animatedDragY) * 0.00005f - abs(animatedDragX) * 0.00005f).coerceIn(0.99f, 1.01f)
-
-    // Blend physics perfectly
-    val tx = jellyTx * (1f - progress) + stretchTx * progress
-    val ty = offsetY + jellyTy * (1f - progress) + stretchTy * progress
-    val sx = squishScale * (jellySx * (1f - progress) + stretchSx * progress)
-    val sy = squishScale * (jellySy * (1f - progress) + stretchSy * progress)
-
-    // Simple touch tap scale-down interaction
-    val isButtonActivelyPressed = isPressed || dragOffset != Offset.Zero || progress > 0f
-    val pressScale by animateFloatAsState(if (isButtonActivelyPressed && progress == 0f) 0.95f else 1f, spring(0.5f, 300f))
+    // Press illumination progress exactly matching LiquidButton
+    val buttonPressProgress by animateFloatAsState(if (isPressed && progress == 0f) 1f else 0f, spring(dampingRatio = 0.6f, stiffness = 400f))
 
     Box(
         modifier = Modifier
             .graphicsLayer {
-                translationX = tx
-                translationY = ty
-                scaleX = sx * pressScale
-                scaleY = sy * pressScale
+                val w = size.width
+                val h = size.height
+                val minDim = min(w, h)
+                val maxDim = max(w, h)
+
+                // 1. Natural Forward Jelly Physics (Collapsed state == 0f)
+                val maxJellyOffset = minDim
+                val initialDerivative = 0.05f
+                val jellyTx = maxJellyOffset * tanh(initialDerivative * animatedDragX / maxJellyOffset)
+                val jellyTy = maxJellyOffset * tanh(initialDerivative * animatedDragY / maxJellyOffset)
+                
+                val baseScale = lerp(1f, 1f + with(density) { 4f.dp.toPx() } / h, buttonPressProgress)
+                val maxDragScale = with(density) { 4f.dp.toPx() / h }
+                val offsetAngle = atan2(animatedDragY, animatedDragX)
+                
+                val jellySx = baseScale + maxDragScale * abs(cos(offsetAngle) * animatedDragX / maxDim) * (w / h).coerceAtMost(1f)
+                val jellySy = baseScale + maxDragScale * abs(sin(offsetAngle) * animatedDragY / maxDim) * (h / w).coerceAtMost(1f)
+
+                // 2. Inverted Resistance Stretch Physics (Expanded state > 0f)
+                val dragMultiplier = -0.03f * progress
+                val stretchTx = animatedDragX * dragMultiplier
+                val stretchTy = animatedDragY * dragMultiplier
+                
+                val stretchX = (1f + abs(animatedDragX) * 0.00005f - abs(animatedDragY) * 0.00005f).coerceIn(0.99f, 1.01f)
+                val stretchY = (1f + abs(animatedDragY) * 0.00005f - abs(animatedDragX) * 0.00005f).coerceIn(0.99f, 1.01f)
+                
+                val expandedSx = squishScale * stretchX
+                val expandedSy = squishScale * stretchY
+
+                // Smoothly blend physics based entirely on current animation progress
+                translationX = lerp(jellyTx, stretchTx, progress)
+                translationY = offsetY + lerp(jellyTy, stretchTy, progress)
+                scaleX = lerp(jellySx, expandedSx, progress)
+                scaleY = lerp(jellySy, expandedSy, progress)
+                
                 this.transformOrigin = transformOrigin
             }
             .drawBackdrop(
@@ -662,9 +674,9 @@ fun GlassEffectContainer(
                 shape = { RoundedCornerShape(cornerRadius) },
                 effects = {
                     if (isGlassEnabled) {
-                        // All sliders strictly control the visual pipeline dynamically
                         vibrancy()
-                        blur(blurRadius.dp.toPx())
+                        // Evaluates base blur + motion blur on every frame natively
+                        blur((blurRadius + 12f * blurProgress.coerceIn(0f, 1f)).dp.toPx())
                         lens(
                             refractionHeight = refractionHeight.dp.toPx(),
                             refractionAmount = refractionAmount.dp.toPx(),
@@ -677,13 +689,13 @@ fun GlassEffectContainer(
                 shadow = { Shadow(radius = 18f.dp, color = Color.Black.copy(alpha = 0.12f)) },
                 innerShadow = { if (isGlassEnabled) InnerShadow(radius = 10f.dp, color = Color.White.copy(alpha = 0.25f)) else null },
                 onDrawSurface = {
-                    val baseAlpha = if (isLightTheme) 0.28f else 0.35f
-                    val progressBoost = 0.12f * progress
-                    drawRect(Color.White.copy(alpha = baseAlpha + progressBoost))
-                    
-                    // Natively replicates LiquidButton highlight touch-glow illumination
-                    if (isButtonActivelyPressed && progress == 0f) {
-                        drawRect(Color.White.copy(alpha = 0.15f))
+                    drawRect(
+                        if (isLightTheme) Color.White.copy(alpha = 0.28f + 0.12f * progress)
+                        else Color(0xFF1E1E1E).copy(alpha = 0.35f + 0.15f * progress)
+                    )
+                    // Button Press Surface Illumination Overlay
+                    if (progress == 0f && buttonPressProgress > 0f) {
+                        drawRect(Color.White.copy(alpha = 0.15f * buttonPressProgress), blendMode = BlendMode.Plus)
                     }
                 }
             )
