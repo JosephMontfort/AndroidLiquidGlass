@@ -166,8 +166,7 @@ fun ExpandableGlassMenuContent() {
         val controlsBackdrop = rememberLayerBackdrop()
 
         Column(
-            modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 16f.dp).verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(16f.dp)
+            modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 16f.dp)
         ) {
             BasicText("Expandable Glass Menu", Modifier.padding(top = 16f.dp, bottom = 4f.dp), style = TextStyle(contentColor, 26f.sp, FontWeight.SemiBold))
             BasicText("Preview", style = TextStyle(Color(0xFF0088FF), 15f.sp, FontWeight.Medium))
@@ -209,8 +208,9 @@ fun ExpandableGlassMenuContent() {
                 }
             }
 
+            Spacer(Modifier.height(16f.dp))
             Column(
-                modifier = Modifier.fillMaxWidth().drawBackdrop(backdrop = backdrop, shape = { RoundedCornerShape(24f.dp) }, effects = { vibrancy(); blur(8f.dp.toPx()); lens(16f.dp.toPx(), 32f.dp.toPx()) }, highlight = { Highlight.Plain }, exportedBackdrop = controlsBackdrop, onDrawSurface = { drawRect(cardBackground) }).padding(20f.dp),
+                modifier = Modifier.fillMaxWidth().weight(1f).padding(bottom = 16f.dp).clip(RoundedCornerShape(24f.dp)).drawBackdrop(backdrop = backdrop, shape = { RoundedCornerShape(24f.dp) }, effects = { vibrancy(); blur(8f.dp.toPx()); lens(16f.dp.toPx(), 32f.dp.toPx()) }, highlight = { Highlight.Plain }, exportedBackdrop = controlsBackdrop, onDrawSurface = { drawRect(cardBackground) }).verticalScroll(rememberScrollState()).padding(20f.dp),
                 verticalArrangement = Arrangement.spacedBy(16f.dp)
             ) {
                 BasicText("Properties", style = TextStyle(contentColor, 18f.sp, FontWeight.SemiBold))
@@ -287,8 +287,7 @@ fun ExpandableGlassMenuContent() {
                     }
                 }
             }
-            Spacer(Modifier.height(16f.dp))
-        }
+            }
     }
 }
 

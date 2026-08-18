@@ -126,8 +126,7 @@ fun FlippedMorphDropdownContent() {
         val controlsBackdrop = rememberLayerBackdrop()
 
         Column(
-            modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 16f.dp).verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(16f.dp)
+            modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 16f.dp)
         ) {
             BasicText("Flipped Morph Dropdown", Modifier.padding(top = 16f.dp, bottom = 4f.dp), style = TextStyle(contentColor, 26f.sp, FontWeight.SemiBold))
             BasicText("Preview", style = TextStyle(Color(0xFF0088FF), 15f.sp, FontWeight.Medium))
@@ -169,8 +168,9 @@ fun FlippedMorphDropdownContent() {
                 }
             }
 
+            Spacer(Modifier.height(16f.dp))
             Column(
-                modifier = Modifier.fillMaxWidth().drawBackdrop(backdrop = backdrop, shape = { RoundedCornerShape(24f.dp) }, effects = { vibrancy(); blur(8f.dp.toPx()); lens(16f.dp.toPx(), 32f.dp.toPx()) }, highlight = { Highlight.Plain }, exportedBackdrop = controlsBackdrop, onDrawSurface = { drawRect(cardBackground) }).padding(20f.dp),
+                modifier = Modifier.fillMaxWidth().weight(1f).padding(bottom = 16f.dp).clip(RoundedCornerShape(24f.dp)).drawBackdrop(backdrop = backdrop, shape = { RoundedCornerShape(24f.dp) }, effects = { vibrancy(); blur(8f.dp.toPx()); lens(16f.dp.toPx(), 32f.dp.toPx()) }, highlight = { Highlight.Plain }, exportedBackdrop = controlsBackdrop, onDrawSurface = { drawRect(cardBackground) }).verticalScroll(rememberScrollState()).padding(20f.dp),
                 verticalArrangement = Arrangement.spacedBy(16f.dp)
             ) {
                 BasicText("Properties", style = TextStyle(contentColor, 18f.sp, FontWeight.SemiBold))
@@ -247,8 +247,7 @@ fun FlippedMorphDropdownContent() {
                     }
                 }
             }
-            Spacer(Modifier.height(16f.dp))
-        }
+            }
     }
 }
 
@@ -484,8 +483,11 @@ fun FlippedGlassEffectContainer(
                 translationY = offsetY + lerp(jellyTy, expandedTy, progress) + with(density) { verticalOffset.dp.toPx() * progress }
                 scaleX = squishScale * lerp(jellySx, expandedStretchX, progress)
                 scaleY = squishScale * lerp(jellySy, expandedStretchY, progress)
-                rotationX = 180f * progress
                 this.transformOrigin = transformOrigin
+            }
+            .graphicsLayer {
+                rotationX = 180f * progress
+                this.transformOrigin = TransformOrigin.Center
             }
             .drawBackdrop(
                 backdrop = backdrop,
@@ -515,8 +517,8 @@ fun FlippedGlassEffectContainer(
             .size(width = with(density) { currentWidthPx.toDp() }, height = with(density) { currentHeightPx.toDp() }),
         contentAlignment = alignment.composeAlignment
     ) {
-        Box(modifier = Modifier.wrapContentSize(unbounded = true, align = alignment.composeAlignment).graphicsLayer { alpha = contentProgress; scaleX = contentScale; scaleY = contentScale; rotationX = 180f * progress; this.transformOrigin = transformOrigin }) { content() }
-        Box(modifier = Modifier.graphicsLayer { alpha = 1f - labelOpacity }) { label() }
+        Box(modifier = Modifier.wrapContentSize(unbounded = true, align = alignment.composeAlignment).graphicsLayer { alpha = contentProgress; scaleX = contentScale; scaleY = contentScale; this.transformOrigin = transformOrigin }.graphicsLayer { rotationX = 180f * progress; this.transformOrigin = TransformOrigin.Center }) { content() }
+        Box(modifier = Modifier.graphicsLayer { alpha = 1f - labelOpacity }.graphicsLayer { rotationX = 180f * progress; this.transformOrigin = TransformOrigin.Center }) { label() }
     }
 }
 
