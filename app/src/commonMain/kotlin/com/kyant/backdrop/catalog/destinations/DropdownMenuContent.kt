@@ -151,7 +151,6 @@ fun ExpandableGlassMenuContent() {
     var refractionHeightDp by remember { mutableFloatStateOf(16f) }
     var refractionAmountDp by remember { mutableFloatStateOf(20f) }
     var chromaticAberration by remember { mutableStateOf(false) }
-    
     var horizontalOffsetDp by remember { mutableFloatStateOf(0f) }
     var verticalOffsetDp by remember { mutableFloatStateOf(0f) }
 
@@ -198,9 +197,9 @@ fun ExpandableGlassMenuContent() {
                         }
                     }
                 ) { globalTouch, closeMenu, hoveredIndex, setHovered ->
-                    MenuRow(SendIcon, "Send", "This is a sample text description", contentColor, secondaryColor, hoveredIndex == 0, { if (it) setHovered(0) }, globalTouchPosition = globalTouch, onClick = closeMenu)
-                    MenuRow(SwapIcon, "Swap", "This is a sample text description", contentColor, secondaryColor, hoveredIndex == 1, { if (it) setHovered(1) }, globalTouchPosition = globalTouch, onClick = closeMenu)
-                    MenuRow(ReceiveIcon, "Receive", "This is a sample text description", contentColor, secondaryColor, hoveredIndex == 2, { if (it) setHovered(2) }, globalTouchPosition = globalTouch, onClick = closeMenu)
+                    MenuRow(SendIcon, "Send", "This is a sample text description", contentColor, secondaryColor, hoveredIndex == 0, { if (it) setHovered(0) else if (hoveredIndex == 0) setHovered(null) }, globalTouchPosition = globalTouch, onClick = closeMenu)
+                    MenuRow(SwapIcon, "Swap", "This is a sample text description", contentColor, secondaryColor, hoveredIndex == 1, { if (it) setHovered(1) else if (hoveredIndex == 1) setHovered(null) }, globalTouchPosition = globalTouch, onClick = closeMenu)
+                    MenuRow(ReceiveIcon, "Receive", "This is a sample text description", contentColor, secondaryColor, hoveredIndex == 2, { if (it) setHovered(2) else if (hoveredIndex == 2) setHovered(null) }, globalTouchPosition = globalTouch, onClick = closeMenu)
                 }
             }
 
