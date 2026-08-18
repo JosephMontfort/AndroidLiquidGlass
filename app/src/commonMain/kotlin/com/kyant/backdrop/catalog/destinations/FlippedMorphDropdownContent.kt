@@ -95,6 +95,7 @@ import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
+import kotlin.math.PI
 import kotlin.math.tanh
 
 @Composable
@@ -434,8 +435,10 @@ fun FlippedGlassEffectContainer(
     val widthDiff = (contentSize.width - labelSize.width).coerceAtLeast(0f)
     val heightDiff = (contentSize.height - labelSize.height).coerceAtLeast(0f)
 
-    val currentWidthPx = labelSize.width + widthDiff * progress
-    val currentHeightPx = labelSize.height + heightDiff * progress
+    val widthProgress = sin(progress * (PI / 2f)).toFloat()
+    val heightProgress = progress * progress
+    val currentWidthPx = labelSize.width + widthDiff * widthProgress
+    val currentHeightPx = labelSize.height + heightDiff * heightProgress
 
     val labelOpacity = (progress / 0.35f).coerceIn(0f, 1f)
     val contentProgress = ((progress - 0.35f) / 0.65f).coerceIn(0f, 1f)
@@ -487,6 +490,7 @@ fun FlippedGlassEffectContainer(
             }
             .graphicsLayer {
                 rotationX = 180f * progress
+                cameraDistance = 32f
                 this.transformOrigin = TransformOrigin.Center
             }
             .drawBackdrop(
@@ -495,7 +499,8 @@ fun FlippedGlassEffectContainer(
                 effects = {
                     if (isGlassEnabled) {
                         vibrancy()
-                        blur((2f + blurRadius * blurProgress.coerceIn(0f, 1f)).dp.toPx())
+                        val motionBlur = 20f * sin(progress * PI).toFloat()
+                        blur((2f + blurRadius * blurProgress.coerceIn(0f, 1f) + motionBlur).dp.toPx())
                         lens(refractionHeight.dp.toPx(), refractionAmount.dp.toPx(), depthEffect = true, chromaticAberration = chromaticAberration)
                     }
                 },
@@ -517,8 +522,8 @@ fun FlippedGlassEffectContainer(
             .size(width = with(density) { currentWidthPx.toDp() }, height = with(density) { currentHeightPx.toDp() }),
         contentAlignment = alignment.composeAlignment
     ) {
-        Box(modifier = Modifier.wrapContentSize(unbounded = true, align = alignment.composeAlignment).graphicsLayer { alpha = contentProgress; scaleX = contentScale; scaleY = contentScale; this.transformOrigin = transformOrigin }.graphicsLayer { rotationX = 180f * progress; this.transformOrigin = TransformOrigin.Center }) { content() }
-        Box(modifier = Modifier.graphicsLayer { alpha = 1f - labelOpacity }.graphicsLayer { rotationX = 180f * progress; this.transformOrigin = TransformOrigin.Center }) { label() }
+        Box(modifier = Modifier.wrapContentSize(unbounded = true, align = alignment.composeAlignment).graphicsLayer { alpha = contentProgress; scaleX = contentScale; scaleY = contentScale; this.transformOrigin = transformOrigin }.graphicsLayer { rotationX = 180f * progress; cameraDistance = 32f; this.transformOrigin = TransformOrigin.Center }) { content() }
+        Box(modifier = Modifier.graphicsLayer { alpha = 1f - labelOpacity }.graphicsLayer { rotationX = 180f * progress; cameraDistance = 32f; this.transformOrigin = TransformOrigin.Center }) { label() }
     }
 }
 

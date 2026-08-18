@@ -98,6 +98,7 @@ import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
+import kotlin.math.PI
 import kotlin.math.tanh
 
 enum class MenuAlignment(val label: String) {
@@ -131,7 +132,7 @@ enum class MenuAnimationPreset(val label: String) {
     Bouncy("Bouncy"), Smooth("Smooth"), Snappy("Snappy");
 
     fun getSpec(isClosing: Boolean = false): AnimationSpec<Float> = when (this) {
-        Bouncy -> if (isClosing) spring(dampingRatio = 0.8f, stiffness = 300f) else spring(dampingRatio = 0.65f, stiffness = 250f)
+        Bouncy -> if (isClosing) spring(dampingRatio = 0.8f, stiffness = 300f) else spring(dampingRatio = 0.6f, stiffness = 180f, visibilityThreshold = 0.001f)
         Smooth -> tween(durationMillis = 650, easing = FastOutSlowInEasing)
         Snappy -> spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow)
     }
@@ -472,8 +473,10 @@ fun GlassEffectContainer(
     val widthDiff = (contentSize.width - labelSize.width).coerceAtLeast(0f)
     val heightDiff = (contentSize.height - labelSize.height).coerceAtLeast(0f)
 
-    val currentWidthPx = labelSize.width + widthDiff * progress
-    val currentHeightPx = labelSize.height + heightDiff * progress
+    val widthProgress = sin(progress * (PI / 2f)).toFloat()
+    val heightProgress = progress * progress
+    val currentWidthPx = labelSize.width + widthDiff * widthProgress
+    val currentHeightPx = labelSize.height + heightDiff * heightProgress
 
     val labelOpacity = (progress / 0.35f).coerceIn(0f, 1f)
     val contentProgress = ((progress - 0.35f) / 0.65f).coerceIn(0f, 1f)
@@ -529,7 +532,8 @@ fun GlassEffectContainer(
                 effects = {
                     if (isGlassEnabled) {
                         vibrancy()
-                        blur((2f + blurRadius * blurProgress.coerceIn(0f, 1f)).dp.toPx())
+                        val motionBlur = 20f * sin(progress * PI).toFloat()
+                        blur((2f + blurRadius * blurProgress.coerceIn(0f, 1f) + motionBlur).dp.toPx())
                         lens(refractionHeight.dp.toPx(), refractionAmount.dp.toPx(), depthEffect = true, chromaticAberration = chromaticAberration)
                     }
                 },
