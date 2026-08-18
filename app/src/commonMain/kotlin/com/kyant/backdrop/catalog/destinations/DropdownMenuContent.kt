@@ -12,6 +12,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,6 +23,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
@@ -106,11 +108,8 @@ enum class MenuAnimationPreset(val label: String) {
     Snappy("Snappy");
 
     fun getSpec(): AnimationSpec<Float> = when (this) {
-        // Equivalent to SwiftUI .bouncy(duration: 0.75, extraBounce: 0.02)
         Bouncy -> spring(dampingRatio = 0.6f, stiffness = 220f)
-        // Equivalent to SwiftUI .smooth
         Smooth -> tween(durationMillis = 650, easing = FastOutSlowInEasing)
-        // Equivalent to SwiftUI .snappy
         Snappy -> spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow)
     }
 }
@@ -363,6 +362,7 @@ fun ExpandableGlassMenu(
             content = {
                 Column(
                     modifier = Modifier
+                        .width(IntrinsicSize.Max) // Ensures uniform width for rows
                         .onSizeChanged {
                             if (it.width > 0 && it.height > 0) {
                                 contentMeasuredSize = it.toSize()
@@ -446,14 +446,19 @@ fun GlassEffectContainer(
                     )
                 }
             )
+            .clip(RoundedRectangle(cornerRadius)) // Critical: Keeps unconstrained items inside the glass
             .size(
                 width = with(density) { currentWidthPx.toDp() },
                 height = with(density) { currentHeightPx.toDp() }
             ),
         contentAlignment = alignment.composeAlignment
     ) {
+        // Content view (scales and fades in)
         Box(
             modifier = Modifier
+                // Critical: This breaks the parent boundaries to measure its full, 
+                // native size matching SwiftUI's `.fixedSize()` modifier logic.
+                .wrapContentSize(unbounded = true, alignment = alignment.composeAlignment) 
                 .graphicsLayer {
                     alpha = contentOpacity
                     scaleX = contentScale
@@ -464,6 +469,7 @@ fun GlassEffectContainer(
             content()
         }
 
+        // Label icon view (fades out)
         Box(
             modifier = Modifier
                 .size(
@@ -490,7 +496,7 @@ fun MenuRow(
 ) {
     Row(
         modifier = Modifier
-            .fillMaxWidth()
+            .fillMaxWidth() // Perfectly matches the IntrinsicSize.Max provided by parent Column
             .clip(Capsule())
             .clickable {}
             .padding(horizontal = 10f.dp, vertical = 6f.dp),
@@ -617,9 +623,8 @@ private object Icons {
                 lineToRelative(-1.41f, -1.41f)
                 lineTo(13f, 16.17f)
                 verticalLineTo(4f)
-                horizontalLineToRelative(-2f
-                )
-                verticalLineToRelative(-12.17f)
+                horizontalLineToRelative(-2f)
+                verticalLineToRelative(12.17f)
                 lineToRelative(-5.58f, -5.59f)
                 lineTo(4f, 12f)
                 lineToRelative(8f, 8f)
