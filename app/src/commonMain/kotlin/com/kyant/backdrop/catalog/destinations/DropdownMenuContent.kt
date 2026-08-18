@@ -60,6 +60,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -92,13 +93,13 @@ import com.kyant.backdrop.shadow.InnerShadow
 import com.kyant.backdrop.shadow.Shadow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
-import kotlin.math.PI
 import kotlin.math.tanh
 
 enum class MenuAlignment(val label: String) {
@@ -132,7 +133,9 @@ enum class MenuAnimationPreset(val label: String) {
     Bouncy("Bouncy"), Smooth("Smooth"), Snappy("Snappy");
 
     fun getSpec(isClosing: Boolean = false): AnimationSpec<Float> = when (this) {
-        Bouncy -> if (isClosing) spring(dampingRatio = 0.8f, stiffness = 300f) else spring(dampingRatio = 0.6f, stiffness = 180f, visibilityThreshold = 0.001f)
+        // Ultra-soft settling via lower stiffness and precise threshold
+        Bouncy -> if (isClosing) spring(dampingRatio = 0.8f, stiffness = 200f, visibilityThreshold = 0.001f) 
+                  else spring(dampingRatio = 0.55f, stiffness = 120f, visibilityThreshold = 0.001f)
         Smooth -> tween(durationMillis = 650, easing = FastOutSlowInEasing)
         Snappy -> spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow)
     }
@@ -288,7 +291,7 @@ fun ExpandableGlassMenuContent() {
                     }
                 }
             }
-            }
+        }
     }
 }
 
@@ -342,7 +345,7 @@ fun ExpandableGlassMenu(
 
     Box(modifier = modifier.fillMaxSize(), contentAlignment = alignment.composeAlignment) {
         GlassEffectContainer(
-            progress = animatableProgress.value,
+            animatableProgress = animatableProgress,
             dragOffset = dragOffset,
             isPressed = isPressed,
             alignment = alignment,
@@ -371,7 +374,7 @@ fun ExpandableGlassMenu(
                                 var isSimpleDrag = false
                                 var upEvent: androidx.compose.ui.input.pointer.PointerInputChange? = null
                                 
-                                val isCurrentlyExpanded = animatableProgress.targetValue > 0.5f
+                                val isExpanded = animatableProgress.value > 0.5f
                                 
                                 val timeoutResult = withTimeoutOrNull(tapTimeout) {
                                     while (true) {
@@ -390,7 +393,7 @@ fun ExpandableGlassMenu(
                                     true
                                 }
 
-                                if (timeoutResult == null && !isCurrentlyExpanded) {
+                                if (timeoutResult == null && !isExpanded) {
                                     isLongPress = true
                                     animationScope.launch { animatableProgress.animateTo(1f, animationPreset.getSpec(isClosing = false)) }
                                 }
@@ -404,7 +407,7 @@ fun ExpandableGlassMenu(
                                         tracking = false
                                     } else {
                                         dragOffset = change.position - downPos
-                                        if (isLongPress || isCurrentlyExpanded) {
+                                        if (isLongPress || isExpanded) {
                                             globalTouchPosition = labelCoordinates?.localToWindow(change.position) ?: Offset.Unspecified
                                         }
                                         change.consume()
@@ -415,18 +418,16 @@ fun ExpandableGlassMenu(
                                 isDragging = false
                                 val finalHoveredIndex = hoveredIndex
 
-                                // Pure release interaction processing
                                 if (upEvent != null && !isSimpleDrag && !isLongPress && timeoutResult != null) {
                                     upEvent.consume()
-                                    val target = if (isCurrentlyExpanded) 0f else 1f
+                                    val target = if (isExpanded) 0f else 1f
                                     animationScope.launch { animatableProgress.animateTo(target, animationPreset.getSpec(isClosing = target == 0f)) }
-                                } else if ((isSimpleDrag || isLongPress) && isCurrentlyExpanded) {
+                                } else if ((isSimpleDrag || isLongPress) && isExpanded) {
                                     if (finalHoveredIndex != null || dragOffset.getDistance() > 20f) {
                                         closeMenu()
                                     }
                                 }
                                 
-                                // Hard reset physics and coordinate bounds immediately
                                 dragOffset = Offset.Zero
                                 globalTouchPosition = Offset.Unspecified
                                 if (animatableProgress.targetValue == 0f) hoveredIndex = null
@@ -449,7 +450,7 @@ fun ExpandableGlassMenu(
 
 @Composable
 fun GlassEffectContainer(
-    progress: Float,
+    animatableProgress: Animatable<Float, *>,
     dragOffset: Offset,
     isPressed: Boolean,
     alignment: MenuAlignment,
@@ -470,34 +471,46 @@ fun GlassEffectContainer(
     val density = LocalDensity.current
     val isLightTheme = !isSystemInDarkTheme()
 
-    val widthDiff = (contentSize.width - labelSize.width).coerceAtLeast(0f)
-    val heightDiff = (contentSize.height - labelSize.height).coerceAtLeast(0f)
-
-    val widthProgress = sin(progress * (PI / 2f)).toFloat()
-    val heightProgress = progress * progress
-    val currentWidthPx = labelSize.width + widthDiff * widthProgress
-    val currentHeightPx = labelSize.height + heightDiff * heightProgress
-
-    val labelOpacity = (progress / 0.35f).coerceIn(0f, 1f)
-    val contentProgress = ((progress - 0.35f) / 0.65f).coerceIn(0f, 1f)
-
-    val minAspectScale = if (contentSize.width > 0f && contentSize.height > 0f) { min(labelSize.width / contentSize.width, labelSize.height / contentSize.height) } else 1f
-    val contentScale = minAspectScale + (1f - minAspectScale) * ((progress - 0.35f) / 0.65f).coerceAtLeast(0f)
-
-    val blurProgress = if (progress > 0.5f) (1f - progress) / 0.5f else progress / 0.5f
-    val squishScale = 1f - (blurProgress.coerceIn(0f, 1f) * 0.05f)
-
-    val maxOffsetPx = with(density) { 75f.dp.toPx() }
-    val offsetY = alignment.calculateOffsetY(blurProgress, maxOffsetPx)
-    val transformOrigin = alignment.transformOrigin
-
     val animatedDragX by animateFloatAsState(dragOffset.x, spring(stiffness = 400f, dampingRatio = 0.6f))
     val animatedDragY by animateFloatAsState(dragOffset.y, spring(stiffness = 400f, dampingRatio = 0.6f))
-    val buttonPressProgress by animateFloatAsState(if (isPressed && progress == 0f) 1f else 0f, spring(dampingRatio = 0.6f, stiffness = 400f))
+    
+    // Press illumination progress
+    val isPressing = isPressed && animatableProgress.targetValue == 0f
+    val buttonPressProgress by animateFloatAsState(if (isPressing) 1f else 0f, spring(dampingRatio = 0.6f, stiffness = 400f))
 
     Box(
         modifier = Modifier
+            // ZERO-RECOMPOSITION LAYOUT (Executes measuring natively without calling recompose)
+            .layout { measurable, constraints ->
+                val p = animatableProgress.value
+                val widthDiff = (contentSize.width - labelSize.width).coerceAtLeast(0f)
+                val heightDiff = (contentSize.height - labelSize.height).coerceAtLeast(0f)
+
+                // Vertical Pill Morph (Height pops instantly, width follows softly)
+                val widthProgress = (p * p).coerceIn(0f, 1f)
+                val heightProgress = sin(p * (PI / 2f)).toFloat().coerceIn(0f, 1f)
+
+                val currentWidthPx = labelSize.width + widthDiff * widthProgress
+                val currentHeightPx = labelSize.height + heightDiff * heightProgress
+
+                val placeable = measurable.measure(
+                    constraints.copy(
+                        minWidth = currentWidthPx.toInt(),
+                        maxWidth = currentWidthPx.toInt(),
+                        minHeight = currentHeightPx.toInt(),
+                        maxHeight = currentHeightPx.toInt()
+                    )
+                )
+                layout(placeable.width, placeable.height) { placeable.place(0, 0) }
+            }
             .graphicsLayer {
+                val progress = animatableProgress.value
+                val blurProgress = if (progress > 0.5f) (1f - progress) / 0.5f else progress / 0.5f
+                val squishScale = 1f - (blurProgress.coerceIn(0f, 1f) * 0.05f)
+
+                val maxOffsetPx = with(density) { 75f.dp.toPx() }
+                val offsetY = alignment.calculateOffsetY(blurProgress, maxOffsetPx)
+
                 val w = size.width
                 val h = size.height
                 val minDim = min(w, h)
@@ -524,15 +537,17 @@ fun GlassEffectContainer(
                 translationY = offsetY + lerp(jellyTy, expandedTy, progress) + with(density) { verticalOffset.dp.toPx() * progress }
                 scaleX = squishScale * lerp(jellySx, expandedStretchX, progress)
                 scaleY = squishScale * lerp(jellySy, expandedStretchY, progress)
-                this.transformOrigin = transformOrigin
+                this.transformOrigin = alignment.transformOrigin
             }
             .drawBackdrop(
                 backdrop = backdrop,
                 shape = { RoundedCornerShape(cornerRadius) },
                 effects = {
+                    val progress = animatableProgress.value
                     if (isGlassEnabled) {
+                        val blurProgress = if (progress > 0.5f) (1f - progress) / 0.5f else progress / 0.5f
+                        val motionBlur = 25f * sin(progress * PI).toFloat()
                         vibrancy()
-                        val motionBlur = 20f * sin(progress * PI).toFloat()
                         blur((2f + blurRadius * blurProgress.coerceIn(0f, 1f) + motionBlur).dp.toPx())
                         lens(refractionHeight.dp.toPx(), refractionAmount.dp.toPx(), depthEffect = true, chromaticAberration = chromaticAberration)
                     }
@@ -541,6 +556,7 @@ fun GlassEffectContainer(
                 shadow = { Shadow(radius = 18f.dp, color = Color.Black.copy(alpha = 0.12f)) },
                 innerShadow = { if (isGlassEnabled) InnerShadow(radius = 10f.dp, color = Color.White.copy(alpha = 0.25f)) else null },
                 onDrawSurface = {
+                    val progress = animatableProgress.value
                     val cr = cornerRadius.toPx()
                     drawRoundRect(
                         color = if (isLightTheme) Color.White.copy(alpha = 0.28f + 0.12f * progress) else Color(0xFF1E1E1E).copy(alpha = 0.35f + 0.15f * progress),
@@ -551,12 +567,39 @@ fun GlassEffectContainer(
                     }
                 }
             )
-            .clip(RoundedCornerShape(cornerRadius))
-            .size(width = with(density) { currentWidthPx.toDp() }, height = with(density) { currentHeightPx.toDp() }),
+            .clip(RoundedCornerShape(cornerRadius)),
         contentAlignment = alignment.composeAlignment
     ) {
-        Box(modifier = Modifier.wrapContentSize(unbounded = true, align = alignment.composeAlignment).graphicsLayer { alpha = contentProgress; scaleX = contentScale; scaleY = contentScale; this.transformOrigin = transformOrigin }) { content() }
-        Box(modifier = Modifier.graphicsLayer { alpha = 1f - labelOpacity }) { label() }
+        Box(
+            modifier = Modifier
+                .wrapContentSize(unbounded = true, align = alignment.composeAlignment) 
+                .graphicsLayer {
+                    val progress = animatableProgress.value
+                    val contentProgress = ((progress - 0.35f) / 0.65f).coerceIn(0f, 1f)
+                    val minAspectScale = if (contentSize.width > 0f && contentSize.height > 0f) { min(labelSize.width / contentSize.width, labelSize.height / contentSize.height) } else 1f
+                    val baseScale = minAspectScale + (1f - minAspectScale) * contentProgress
+                    
+                    // iOS Squish stretching from the absolute center
+                    val pop = sin(progress * PI).toFloat()
+                    
+                    alpha = contentProgress
+                    scaleX = baseScale + pop * 0.03f
+                    scaleY = baseScale + pop * 0.01f
+                    this.transformOrigin = TransformOrigin.Center
+                }
+        ) {
+            content()
+        }
+
+        Box(
+            modifier = Modifier.graphicsLayer { 
+                val progress = animatableProgress.value
+                val labelOpacity = (progress / 0.35f).coerceIn(0f, 1f)
+                alpha = 1f - labelOpacity 
+            }
+        ) {
+            label()
+        }
     }
 }
 
