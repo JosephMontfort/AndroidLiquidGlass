@@ -1,6 +1,5 @@
 package com.kyant.backdrop.catalog.destinations
 
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -169,9 +168,10 @@ fun ExpandableGlassMenuContent() {
                     .height(340f.dp)
                     .clip(RoundedCornerShape(20f.dp))
                     .background(Color.Black.copy(alpha = 0.08f))
-                    .pointerInput(progress) {
+                    // Uses Unit to prevent resetting the gesture on every animation frame
+                    .pointerInput(Unit) {
                         detectTapGestures {
-                            if (progress > 0.1f) {
+                            if (animatableProgress.value > 0.1f) {
                                 animationScope.launch {
                                     animatableProgress.animateTo(0f, selectedPreset.getSpec()) { progress = value }
                                 }
@@ -205,14 +205,15 @@ fun ExpandableGlassMenuContent() {
                             )
                         }
                     }
-                ) { globalHoverPosition ->
+                ) { globalTouch, closeMenu ->
                     MenuRow(
                         icon = Icons.Send,
                         title = "Send",
                         description = "This is a sample text description",
                         contentColor = contentColor,
                         secondaryColor = secondaryColor,
-                        globalTouchPosition = globalHoverPosition
+                        globalTouchPosition = globalTouch,
+                        onClick = closeMenu
                     )
                     MenuRow(
                         icon = Icons.Swap,
@@ -220,7 +221,8 @@ fun ExpandableGlassMenuContent() {
                         description = "This is a sample text description",
                         contentColor = contentColor,
                         secondaryColor = secondaryColor,
-                        globalTouchPosition = globalHoverPosition
+                        globalTouchPosition = globalTouch,
+                        onClick = closeMenu
                     )
                     MenuRow(
                         icon = Icons.Receive,
@@ -228,7 +230,8 @@ fun ExpandableGlassMenuContent() {
                         description = "This is a sample text description",
                         contentColor = contentColor,
                         secondaryColor = secondaryColor,
-                        globalTouchPosition = globalHoverPosition
+                        globalTouchPosition = globalTouch,
+                        onClick = closeMenu
                     )
                 }
             }
@@ -336,7 +339,7 @@ fun ExpandableGlassMenu(
     cornerRadius: Dp = 30f.dp,
     labelSize: Size = Size(55f, 55f),
     label: @Composable () -> Unit,
-    content: @Composable (globalTouchPosition: Offset) -> Unit
+    content: @Composable (globalTouchPosition: Offset, closeMenu: () -> Unit) -> Unit
 ) {
     val density = LocalDensity.current
     val viewConfiguration = LocalViewConfiguration.current
@@ -348,6 +351,12 @@ fun ExpandableGlassMenu(
     var labelCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
 
     val labelSizePx = with(density) { Size(labelSize.width.dp.toPx(), labelSize.height.dp.toPx()) }
+
+    val closeMenu: () -> Unit = {
+        animationScope.launch {
+            animatableProgress.animateTo(0f, animationPreset.getSpec()) { onProgressUpdate(value) }
+        }
+    }
 
     Box(
         modifier = modifier.fillMaxSize(),
@@ -366,34 +375,38 @@ fun ExpandableGlassMenu(
                     modifier = Modifier
                         .size(with(density) { labelSizePx.width.toDp() })
                         .onGloballyPositioned { labelCoordinates = it }
-                        .pointerInput(progress, animationPreset) {
+                        // Passing Unit ensures this is not recreated 60x a second during animation
+                        .pointerInput(Unit) {
                             awaitEachGesture {
                                 val down = awaitFirstDown(requireUnconsumed = false)
                                 val downPos = down.position
                                 val tapTimeout = viewConfiguration.longPressTimeoutMillis
                                 
-                                val upOrCancel = withTimeoutOrNull(tapTimeout) {
+                                val upEvent = withTimeoutOrNull(tapTimeout) {
                                     var up: androidx.compose.ui.input.pointer.PointerInputChange? = null
                                     while (up == null) {
                                         val event = awaitPointerEvent(PointerEventPass.Main)
-                                        if (event.changes.all { !it.pressed }) {
-                                            up = event.changes.first()
-                                        } else if (event.changes.any { (it.position - downPos).getDistance() > viewConfiguration.touchSlop }) {
-                                            break // Moved outside threshold, convert to drag
+                                        val change = event.changes.firstOrNull()
+                                        if (change != null) {
+                                            if (!change.pressed) {
+                                                up = change
+                                            } else if ((change.position - downPos).getDistance() > viewConfiguration.touchSlop) {
+                                                break // Broken out, indicating a drag rather than a pure long-press hold
+                                            }
                                         }
                                     }
                                     up
                                 }
 
-                                if (upOrCancel != null) {
-                                    // Trigger Tap!
-                                    upOrCancel.consume()
-                                    val target = if (progress > 0.5f) 0f else 1f
+                                if (upEvent != null) {
+                                    // Trigger Tap
+                                    upEvent.consume()
+                                    val target = if (animatableProgress.value > 0.5f) 0f else 1f
                                     animationScope.launch {
                                         animatableProgress.animateTo(target, animationPreset.getSpec()) { onProgressUpdate(value) }
                                     }
                                 } else {
-                                    // Trigger Long Press Expansion!
+                                    // Trigger Long Press / Drag
                                     animationScope.launch {
                                         animatableProgress.animateTo(1f, animationPreset.getSpec()) { onProgressUpdate(value) }
                                     }
@@ -411,11 +424,9 @@ fun ExpandableGlassMenu(
                                         }
                                     }
                                     
-                                    // On Release: Close the menu if we dragged significantly indicating a selection action
+                                    // On Release
                                     if (dragOffset.getDistance() > 20f) {
-                                        animationScope.launch {
-                                            animatableProgress.animateTo(0f, animationPreset.getSpec()) { onProgressUpdate(value) }
-                                        }
+                                        closeMenu()
                                     }
                                     
                                     dragOffset = Offset.Zero
@@ -438,7 +449,7 @@ fun ExpandableGlassMenu(
                         .padding(10f.dp),
                     verticalArrangement = Arrangement.spacedBy(12f.dp)
                 ) {
-                    content(globalTouchPosition)
+                    content(globalTouchPosition, closeMenu)
                 }
             }
         )
@@ -473,7 +484,6 @@ fun GlassEffectContainer(
         min(labelSize.width / contentSize.width, labelSize.height / contentSize.height)
     } else 1f
     
-    // Allows bounce oversizing natively
     val contentScale = minAspectScale + (1f - minAspectScale) * ((progress - 0.35f) / 0.65f).coerceAtLeast(0f)
 
     val blurProgress = if (progress > 0.5f) (1f - progress) / 0.5f else progress / 0.5f
@@ -483,11 +493,9 @@ fun GlassEffectContainer(
     val offsetY = alignment.calculateOffsetY(blurProgress, maxOffsetPx)
     val transformOrigin = alignment.transformOrigin
 
-    // Organic Physics Drag Squish Calculation
     val animatedDragX by animateFloatAsState(dragOffset.x, spring(stiffness = 400f, dampingRatio = 0.6f))
     val animatedDragY by animateFloatAsState(dragOffset.y, spring(stiffness = 400f, dampingRatio = 0.6f))
 
-    // Pulling down stretches Y and squeezes X
     val stretchY = 1f + abs(animatedDragY) * 0.0005f
     val stretchX = 1f - abs(animatedDragY) * 0.0003f
 
@@ -502,11 +510,10 @@ fun GlassEffectContainer(
             }
             .drawBackdrop(
                 backdrop = backdrop,
-                shape = { RoundedCornerShape(cornerRadius) }, // Native shape implementation to fix square clipping artifacts
+                shape = { RoundedCornerShape(cornerRadius) },
                 effects = {
                     vibrancy()
                     blur((2f + 12f * blurProgress.coerceIn(0f, 1f)).dp.toPx())
-                    // Remove highly expensive SDF evaluation while scaling for 120fps fluidity
                     if (progress == 0f || progress == 1f) {
                         lens(16f.dp.toPx(), 24f.dp.toPx(), depthEffect = true)
                     }
@@ -530,6 +537,7 @@ fun GlassEffectContainer(
     ) {
         Box(
             modifier = Modifier
+                // Resolved the explicit align parameter
                 .wrapContentSize(unbounded = true, align = alignment.composeAlignment) 
                 .graphicsLayer {
                     alpha = contentProgress
@@ -542,8 +550,7 @@ fun GlassEffectContainer(
         }
 
         Box(
-            modifier = Modifier
-                .graphicsLayer { alpha = 1f - labelOpacity }
+            modifier = Modifier.graphicsLayer { alpha = 1f - labelOpacity }
         ) {
             label()
         }
@@ -557,11 +564,11 @@ fun MenuRow(
     description: String,
     contentColor: Color,
     secondaryColor: Color,
-    globalTouchPosition: Offset
+    globalTouchPosition: Offset,
+    onClick: () -> Unit
 ) {
     var rowCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
     
-    // Dynamic interaction highlighting check mapping global drag events
     val isHovered = remember(globalTouchPosition, rowCoords) {
         if (globalTouchPosition.isUnspecified || rowCoords == null) false
         else rowCoords!!.boundsInWindow().contains(globalTouchPosition)
@@ -573,7 +580,9 @@ fun MenuRow(
         modifier = Modifier
             .fillMaxWidth()
             .onGloballyPositioned { rowCoords = it }
-            .background(contentColor.copy(alpha = hoverAlpha), RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(14f.dp))
+            .clickable { onClick() }
+            .background(contentColor.copy(alpha = hoverAlpha))
             .padding(horizontal = 10f.dp, vertical = 6f.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14f.dp)
