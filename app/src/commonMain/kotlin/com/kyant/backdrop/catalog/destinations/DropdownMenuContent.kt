@@ -69,8 +69,8 @@ fun DropdownMenuContent() {
                         progressAnimation.animateTo(
                             targetValue = target,
                             animationSpec = spring(
-                                dampingRatio = 0.72f,
-                                stiffness = 720f,
+                                dampingRatio = 0.78f,
+                                stiffness = 540f,
                                 visibilityThreshold = 0.0005f,
                             ),
                         )

@@ -6,6 +6,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Constraints
@@ -19,21 +20,23 @@ import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.effects.vibrancy
 import com.kyant.backdrop.highlight.Highlight
 import com.kyant.shapes.RoundedRectangle
+import kotlin.math.PI
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
+import kotlin.math.sin
 
 /**
  * Compose port of the supplied SwiftUI ExpandableGlassMenu.
  *
- * The component has one source of truth: `progress`.
- *
- * - The menu size morphs from the circular label size to the measured content size.
- * - The label fades, blurs, scales and travels on the same progress curve.
- * - The WHOLE glass surface drifts away from its initial button location while opening,
- *   then settles at a small offset. This is deliberate for the Android demo so the
- *   physical "button becomes panel" motion is visible instead of looking like a
- *   rectangle growing underneath a stationary button.
+ * Motion model:
+ *  - `progress` remains the single source of truth and may overshoot while springing.
+ *  - The first ~18% is an anticipatory lift/squish: the closed glass button physically
+ *    leaves its resting point before the large morph becomes obvious.
+ *  - The lift is applied to the whole glass surface, not just the icon/content.
+ *  - The surface then grows from the same bottom-trailing anchor and settles at a
+ *    noticeably higher/left final position.
+ *  - The original SwiftUI label blur, opacity, scale and -75dp travel remain intact.
  */
 @Composable
 fun ExpandableGlassMenu(
@@ -48,35 +51,45 @@ fun ExpandableGlassMenu(
 ) {
     val density = LocalDensity.current
 
-    /*
-     * Whole-surface physical travel.
-     *
-     * Unlike a graphics-layer-only translation, Modifier.offset changes the
-     * component's actual placed position, so the glass surface, the circular
-     * label, and the clickable area all move together. The parent remains
-     * bottom-end aligned, while the visible object drifts up/left as it morphs.
-     */
-    val clampedProgress = progress.coerceIn(0f, 1f)
-    val smoothProgress = clampedProgress * clampedProgress *
-        (3f - (2f * clampedProgress))
+    val p = progress.coerceIn(0f, 1f)
 
-    val settledDrift = with(density) { 28.dp.toPx() }
-    val transientDrift = with(density) { 6.dp.toPx() }
-    val openingOvershoot = max(progress - 1f, 0f)
-    val closingOvershoot = min(progress, 0f)
+    // The visual expansion intentionally lags the very first instant of the spring.
+    // This creates the "lift -> squish -> open" cadence visible in the reference.
+    val morphProgress = ((p - 0.055f) / 0.945f).coerceIn(0f, 1f)
+    val morphEase = morphProgress * morphProgress * (3f - 2f * morphProgress)
 
-    val drift =
-        (settledDrift * smoothProgress) +
-            (transientDrift * openingOvershoot) +
-            (transientDrift * closingOvershoot)
+    // Short anticipatory lift. It rises quickly, peaks around 10%, then relaxes
+    // while the actual panel expansion takes over.
+    val liftPhase = (p / 0.24f).coerceIn(0f, 1f)
+    val liftEnvelope = sin((liftPhase * PI).toFloat())
+
+    val settledOffsetX = with(density) { 38.dp.toPx() }
+    val settledOffsetY = with(density) { 62.dp.toPx() }
+    val anticipatoryLift = with(density) { 24.dp.toPx() }
+    val anticipatorySquish = (liftEnvelope * (1f - morphEase * 0.55f)).coerceIn(0f, 1f)
+
+    // The final drift is deliberately more vertical than v4. The whole surface moves,
+    // while the early lift provides the unmistakable "button leaves its spot" moment.
+    val driftX = settledOffsetX * morphEase + with(density) { 4.dp.toPx() } * liftEnvelope
+    val driftY = -(settledOffsetY * morphEase + anticipatoryLift * liftEnvelope)
+
+    // Whole-surface anticipation: very mild horizontal stretch + vertical compression,
+    // centered on the bottom-right anchor. This is the requested squish before opening.
+    val wholeScaleX = 1f + (0.055f * anticipatorySquish)
+    val wholeScaleY = 1f - (0.105f * anticipatorySquish)
 
     SubcomposeLayout(
         modifier = modifier
             .offset {
                 IntOffset(
-                    x = -drift.roundToInt(),
-                    y = -drift.roundToInt(),
+                    x = -driftX.roundToInt(),
+                    y = driftY.roundToInt(),
                 )
+            }
+            .graphicsLayer {
+                transformOrigin = TransformOrigin(1f, 1f)
+                scaleX = wholeScaleX
+                scaleY = wholeScaleY
             }
             .drawBackdrop(
                 backdrop = backdrop,
@@ -116,14 +129,13 @@ fun ExpandableGlassMenu(
         val contentWidth = contentPlaceable.width
         val contentHeight = contentPlaceable.height
 
-        /*
-         * Preserve the SwiftUI interpolation, including small spring overshoot.
-         * The spring is responsible for the "rubbery" size response.
-         */
+        // Keep the SwiftUI interpolation, but use the delayed morphProgress only for
+        // the initial physical anticipation. Once opening starts, the same 0..1 morph
+        // math is preserved.
         val widthPx =
-            labelWidthPx + ((contentWidth - labelWidthPx) * progress).roundToInt()
+            labelWidthPx + ((contentWidth - labelWidthPx) * morphProgress).roundToInt()
         val heightPx =
-            labelHeightPx + ((contentHeight - labelHeightPx) * progress).roundToInt()
+            labelHeightPx + ((contentHeight - labelHeightPx) * morphProgress).roundToInt()
 
         val layoutWidth = max(1, widthPx)
         val layoutHeight = max(1, heightPx)
@@ -140,16 +152,13 @@ fun ExpandableGlassMenu(
             labelHeightPx.toFloat() / contentHeightSafe.toFloat(),
         )
         val contentScale =
-            minAspectScale + ((1f - minAspectScale) * progress)
+            minAspectScale + ((1f - minAspectScale) * morphProgress)
 
         val labelOpacity = 1f - min(progress / 0.35f, 1f)
         val contentOpacity = max(progress - 0.35f, 0f) / 0.65f
 
-        /*
-         * Exact SwiftUI triangular blur curve.
-         * Do not use abs()/clamp here: the spring's final overshoot gives the
-         * label a natural reverse pulse as it settles.
-         */
+        // Original SwiftUI triangular blur curve. Keep raw progress here so the
+        // spring's little overshoot still produces the reverse blur pulse.
         val blurProgress = if (progress <= 0.5f) {
             progress / 0.5f
         } else {
@@ -157,11 +166,6 @@ fun ExpandableGlassMenu(
         }
 
         layout(layoutWidth, layoutHeight) {
-            /*
-             * The expanded surface is anchored from the bottom-right internally:
-             * the content and label occupy the same 55x55 anchor frame used by
-             * the SwiftUI implementation.
-             */
             val anchorFrameX = layoutWidth - labelWidthPx
             val anchorFrameY = layoutHeight - labelHeightPx
 
@@ -182,7 +186,7 @@ fun ExpandableGlassMenu(
                 x = anchorFrameX,
                 y = anchorFrameY,
             ) {
-                val labelScale = 1f + (blurProgress * 0.45f)
+                val labelScale = 1f + (blurProgress.coerceAtLeast(0f) * 0.45f)
                 val blurRadiusPx =
                     (14.dp.toPx() * blurProgress).coerceAtLeast(0f)
 
@@ -191,7 +195,7 @@ fun ExpandableGlassMenu(
                 scaleX = labelScale
                 scaleY = labelScale
 
-                // Original SwiftUI bottom-trailing offset.
+                // Exact bottom-trailing SwiftUI direction.
                 translationY = -75.dp.toPx() * blurProgress
 
                 renderEffect =
