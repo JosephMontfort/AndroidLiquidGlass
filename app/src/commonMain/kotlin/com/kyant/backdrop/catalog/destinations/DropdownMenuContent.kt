@@ -35,6 +35,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -73,6 +74,7 @@ import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.kyant.backdrop.catalog.BackdropDemoScaffold
 import com.kyant.backdrop.catalog.components.LiquidButton
 import com.kyant.backdrop.catalog.components.LiquidSlider
+import com.kyant.backdrop.catalog.components.LiquidToggle
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.lens
@@ -137,6 +139,14 @@ fun ExpandableGlassMenuContent() {
     var selectedAlignment by remember { mutableStateOf(MenuAlignment.TopLeading) }
     var selectedPreset by remember { mutableStateOf(MenuAnimationPreset.Bouncy) }
 
+    // Glass properties state
+    var isGlassEnabled by remember { mutableStateOf(true) }
+    var cornerRadiusDp by remember { mutableFloatStateOf(30f) }
+    var blurRadiusDp by remember { mutableFloatStateOf(12f) }
+    var refractionHeightDp by remember { mutableFloatStateOf(16f) }
+    var refractionAmountDp by remember { mutableFloatStateOf(24f) }
+    var chromaticAberration by remember { mutableStateOf(false) }
+
     val animationScope = rememberCoroutineScope()
     val animatableProgress = remember { Animatable(0f) }
 
@@ -181,6 +191,12 @@ fun ExpandableGlassMenuContent() {
                     animationPreset = selectedPreset,
                     alignment = selectedAlignment,
                     backdrop = backdrop,
+                    isGlassEnabled = isGlassEnabled,
+                    cornerRadius = cornerRadiusDp.dp,
+                    blurRadius = blurRadiusDp,
+                    refractionHeight = refractionHeightDp,
+                    refractionAmount = refractionAmountDp,
+                    chromaticAberration = chromaticAberration,
                     modifier = Modifier.padding(16f.dp),
                     label = {
                         Box(
@@ -317,6 +333,83 @@ fun ExpandableGlassMenuContent() {
                         }
                     }
                 }
+
+                // Glass Effects Section
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    BasicText("Glass Effect", style = TextStyle(contentColor, 14f.sp))
+                    LiquidToggle(
+                        selected = { isGlassEnabled },
+                        onSelect = { isGlassEnabled = it },
+                        backdrop = controlsBackdrop
+                    )
+                }
+
+                if (isGlassEnabled) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8f.dp)) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            BasicText("Corner Radius", style = TextStyle(contentColor, 14f.sp))
+                            BasicText("${cornerRadiusDp.toInt()} dp", style = TextStyle(secondaryColor, 14f.sp))
+                        }
+                        LiquidSlider(
+                            value = { cornerRadiusDp },
+                            onValueChange = { cornerRadiusDp = it },
+                            valueRange = 0f..64f,
+                            visibilityThreshold = 0.1f,
+                            backdrop = controlsBackdrop
+                        )
+                    }
+
+                    Column(verticalArrangement = Arrangement.spacedBy(8f.dp)) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            BasicText("Blur Radius", style = TextStyle(contentColor, 14f.sp))
+                            BasicText("${blurRadiusDp.toInt()} dp", style = TextStyle(secondaryColor, 14f.sp))
+                        }
+                        LiquidSlider(
+                            value = { blurRadiusDp },
+                            onValueChange = { blurRadiusDp = it },
+                            valueRange = 0f..32f,
+                            visibilityThreshold = 0.1f,
+                            backdrop = controlsBackdrop
+                        )
+                    }
+
+                    Column(verticalArrangement = Arrangement.spacedBy(8f.dp)) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            BasicText("Refraction Height", style = TextStyle(contentColor, 14f.sp))
+                            BasicText("${refractionHeightDp.toInt()} dp", style = TextStyle(secondaryColor, 14f.sp))
+                        }
+                        LiquidSlider(
+                            value = { refractionHeightDp },
+                            onValueChange = { refractionHeightDp = it },
+                            valueRange = 0f..48f,
+                            visibilityThreshold = 0.1f,
+                            backdrop = controlsBackdrop
+                        )
+                    }
+
+                    Column(verticalArrangement = Arrangement.spacedBy(8f.dp)) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            BasicText("Refraction Amount", style = TextStyle(contentColor, 14f.sp))
+                            BasicText("${refractionAmountDp.toInt()} dp", style = TextStyle(secondaryColor, 14f.sp))
+                        }
+                        LiquidSlider(
+                            value = { refractionAmountDp },
+                            onValueChange = { refractionAmountDp = it },
+                            valueRange = 0f..64f,
+                            visibilityThreshold = 0.1f,
+                            backdrop = controlsBackdrop
+                        )
+                    }
+
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        BasicText("Chromatic Aberration", style = TextStyle(contentColor, 14f.sp))
+                        LiquidToggle(
+                            selected = { chromaticAberration },
+                            onSelect = { chromaticAberration = it },
+                            backdrop = controlsBackdrop
+                        )
+                    }
+                }
             }
             Spacer(Modifier.height(16f.dp))
         }
@@ -329,8 +422,13 @@ fun ExpandableGlassMenu(
     animationPreset: MenuAnimationPreset,
     alignment: MenuAlignment,
     backdrop: Backdrop,
+    isGlassEnabled: Boolean,
+    cornerRadius: Dp,
+    blurRadius: Float,
+    refractionHeight: Float,
+    refractionAmount: Float,
+    chromaticAberration: Boolean,
     modifier: Modifier = Modifier,
-    cornerRadius: Dp = 30f.dp,
     labelSize: Size = Size(55f, 55f),
     label: @Composable () -> Unit,
     content: @Composable (globalTouchPosition: Offset, closeMenu: () -> Unit, hoveredIndex: Int?, setHovered: (Int?) -> Unit) -> Unit
@@ -369,7 +467,12 @@ fun ExpandableGlassMenu(
             dragOffset = dragOffset,
             alignment = alignment,
             backdrop = backdrop,
+            isGlassEnabled = isGlassEnabled,
             cornerRadius = cornerRadius,
+            blurRadius = blurRadius,
+            refractionHeight = refractionHeight,
+            refractionAmount = refractionAmount,
+            chromaticAberration = chromaticAberration,
             labelSize = labelSizePx,
             contentSize = contentMeasuredSize,
             label = {
@@ -406,7 +509,6 @@ fun ExpandableGlassMenu(
                                     true
                                 }
 
-                                // Long Press trigger if timeout expires without moving out of bounds
                                 if (timeoutResult == null && !isExpanded) {
                                     isLongPress = true
                                     animationScope.launch {
@@ -422,7 +524,6 @@ fun ExpandableGlassMenu(
                                         tracking = false
                                     } else {
                                         dragOffset = change.position - downPos
-                                        // Update hover positions if we are expanded or actively expanding via long press
                                         if (isLongPress || isExpanded) {
                                             globalTouchPosition = labelCoordinates?.localToWindow(change.position) ?: Offset.Unspecified
                                         }
@@ -430,22 +531,18 @@ fun ExpandableGlassMenu(
                                     }
                                 }
 
-                                // Action on release
                                 if (upEvent != null && !isSimpleDrag && !isLongPress && timeoutResult != null) {
-                                    // A direct tap
                                     upEvent?.consume()
                                     val target = if (isExpanded) 0f else 1f
                                     animationScope.launch {
                                         animatableProgress.animateTo(target, animationPreset.getSpec(isClosing = target == 0f))
                                     }
                                 } else if ((isSimpleDrag || isLongPress) && isExpanded) {
-                                    // Dragged in expanded state, execute action if hovered, or close if dragged outside.
                                     if (dragOffset.getDistance() > 20f || hoveredIndex != null) {
                                         closeMenu()
                                     }
                                 }
                                 
-                                // Cleanup physical offsets entirely when finger lifts
                                 dragOffset = Offset.Zero
                                 globalTouchPosition = Offset.Unspecified
                                 hoveredIndex = null
@@ -479,7 +576,12 @@ fun GlassEffectContainer(
     dragOffset: Offset,
     alignment: MenuAlignment,
     backdrop: Backdrop,
+    isGlassEnabled: Boolean,
     cornerRadius: Dp,
+    blurRadius: Float,
+    refractionHeight: Float,
+    refractionAmount: Float,
+    chromaticAberration: Boolean,
     labelSize: Size,
     contentSize: Size,
     label: @Composable () -> Unit,
@@ -513,12 +615,8 @@ fun GlassEffectContainer(
     val animatedDragX by animateFloatAsState(dragOffset.x, spring(stiffness = 400f, dampingRatio = 0.6f))
     val animatedDragY by animateFloatAsState(dragOffset.y, spring(stiffness = 400f, dampingRatio = 0.6f))
 
-    // Pull translation dynamically inverts based on progress
-    // When progress == 0f (collapsed), factor is +0.08f, matching finger movement naturally.
-    // When progress == 1f (expanded), factor is -0.03f, causing resistance in the opposite direction.
     val dragMultiplier = 0.08f * (1f - progress) - 0.03f * progress
 
-    // Minimal glass-like bounds (Strict 1% Stretch tolerance)
     val stretchX = (1f + abs(animatedDragX) * 0.00005f - abs(animatedDragY) * 0.00005f).coerceIn(0.99f, 1.01f)
     val stretchY = (1f + abs(animatedDragY) * 0.00005f - abs(animatedDragX) * 0.00005f).coerceIn(0.99f, 1.01f)
 
@@ -535,18 +633,21 @@ fun GlassEffectContainer(
                 backdrop = backdrop,
                 shape = { RoundedCornerShape(cornerRadius) },
                 effects = {
-                    // Maximum fluidity: Only calculate basic linear blur while animating.
-                    blur((2f + 10f * blurProgress.coerceIn(0f, 1f)).dp.toPx())
-                    
-                    // Re-add high-cost matrix calculations only when structurally at rest
-                    if (progress == 0f || progress == 1f) {
+                    if (isGlassEnabled) {
+                        // Reverted Performance Opt: Fully calculates effects perfectly every frame
                         vibrancy()
-                        lens(16f.dp.toPx(), 24f.dp.toPx(), depthEffect = false)
+                        blur((2f + blurRadius * blurProgress.coerceIn(0f, 1f)).dp.toPx())
+                        lens(
+                            refractionHeight = refractionHeight.dp.toPx(),
+                            refractionAmount = refractionAmount.dp.toPx(),
+                            depthEffect = true,
+                            chromaticAberration = chromaticAberration
+                        )
                     }
                 },
-                highlight = { Highlight.Default.copy(alpha = 0.65f) },
+                highlight = { if (isGlassEnabled) Highlight.Default.copy(alpha = 0.65f) else null },
                 shadow = { Shadow(radius = 18f.dp, color = Color.Black.copy(alpha = 0.12f)) },
-                innerShadow = { InnerShadow(radius = 10f.dp, color = Color.White.copy(alpha = 0.25f)) },
+                innerShadow = { if (isGlassEnabled) InnerShadow(radius = 10f.dp, color = Color.White.copy(alpha = 0.25f)) else null },
                 onDrawSurface = {
                     drawRect(
                         if (isLightTheme) Color.White.copy(alpha = 0.28f + 0.12f * progress)
@@ -596,7 +697,6 @@ fun MenuRow(
 ) {
     var rowCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
     
-    // Pure bounds checking allows the finger leaving the window to un-select entirely
     val contains = remember(globalTouchPosition, rowCoords) {
         if (globalTouchPosition.isUnspecified || rowCoords == null) false
         else rowCoords!!.boundsInWindow().contains(globalTouchPosition)
