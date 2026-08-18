@@ -45,6 +45,7 @@ fun MainContent() {
             CatalogDestination.Dialog -> DialogContent()
             CatalogDestination.DropdownMenu -> ExpandableGlassMenuContent()
             CatalogDestination.FlippedMorphDropdown -> FlippedMorphDropdownContent()
+            CatalogDestination.FlippedMorphDropdown -> FlippedMorphDropdownContent()
 
             CatalogDestination.LockScreen -> LockScreenContent()
             CatalogDestination.ControlCenter -> ControlCenterContent()

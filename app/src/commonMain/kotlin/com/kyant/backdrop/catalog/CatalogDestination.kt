@@ -10,6 +10,7 @@ enum class CatalogDestination {
     Dialog,
     DropdownMenu,
     FlippedMorphDropdown,
+    FlippedMorphDropdown,
 
     LockScreen,
     ControlCenter,
