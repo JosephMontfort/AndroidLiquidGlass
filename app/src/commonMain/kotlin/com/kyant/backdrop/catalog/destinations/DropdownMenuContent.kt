@@ -108,7 +108,7 @@ enum class MenuAnimationPreset(val label: String) {
     Snappy("Snappy");
 
     fun getSpec(): AnimationSpec<Float> = when (this) {
-        Bouncy -> spring(dampingRatio = 0.6f, stiffness = 220f)
+        Bouncy -> spring(dampingRatio = 0.65f, stiffness = 250f)
         Smooth -> tween(durationMillis = 650, easing = FastOutSlowInEasing)
         Snappy -> spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow)
     }
@@ -407,10 +407,10 @@ fun GlassEffectContainer(
     } else {
         1f
     }
-    val contentScale = minAspectScale + (1f - minAspectScale) * contentProgress
+    val contentScale = minAspectScale + (1f - minAspectScale) * ((progress - 0.35f) / 0.65f).coerceAtLeast(0f)
 
     val blurProgress = if (progress > 0.5f) (1f - progress) / 0.5f else progress / 0.5f
-    val squishScale = 1f - (blurProgress * 0.05f)
+    val squishScale = 1f - (blurProgress.coerceIn(0f, 1f) * 0.05f)
 
     val maxOffsetPx = with(density) { 75f.dp.toPx() }
     val offsetY = alignment.calculateOffsetY(blurProgress, maxOffsetPx)
@@ -428,13 +428,8 @@ fun GlassEffectContainer(
                 backdrop = backdrop,
                 shape = { RoundedRectangle(cornerRadius) },
                 effects = {
-                    vibrancy()
-                    blur((2f + 12f * blurProgress).dp.toPx())
-                    lens(
-                        refractionHeight = 16f.dp.toPx(),
-                        refractionAmount = 24f.dp.toPx(),
-                        depthEffect = true
-                    )
+                    // Removed heavy vibrancy and SDF lens during size animation for ultra fluidity
+                    blur((2f + 6f * blurProgress.coerceIn(0f, 1f)).dp.toPx())
                 },
                 highlight = { Highlight.Default.copy(alpha = 0.65f) },
                 shadow = { Shadow(radius = 18f.dp, color = Color.Black.copy(alpha = 0.12f)) },
