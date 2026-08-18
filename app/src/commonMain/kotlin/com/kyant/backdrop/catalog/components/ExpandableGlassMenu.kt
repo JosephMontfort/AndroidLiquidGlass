@@ -5,7 +5,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.SubcomposeLayout
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -16,19 +18,22 @@ import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.effects.vibrancy
 import com.kyant.backdrop.highlight.Highlight
 import com.kyant.shapes.RoundedRectangle
-import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
- * Compose port of the supplied SwiftUI ExpandableGlassMenu.
+ * Faithful Compose port of the supplied SwiftUI ExpandableGlassMenu.
  *
- * `progress` is still the exact SwiftUI-style morph driver. `impact` is an
- * Android-only physical impulse layered on top of it to reproduce the very
- * short press/depth/rebound that is perceptually obvious in Apple's bouncy
- * rendering: the surface dips into the anchor, punches outward, then settles
- * while the geometry morph is already underway.
+ * The important detail is that `progress` is allowed to overshoot. SwiftUI's
+ * Animatable protocol receives the spring's raw interpolated value; it is NOT
+ * clamped to [0, 1]. That overshoot is what makes width/height, scale, blur,
+ * label offset and label scale all participate in the same physical bounce.
+ *
+ * The bottom-right corner is the fixed anchor for this demo, exactly like the
+ * original `.bottomTrailing` composition. The visible circular label travels
+ * away from that anchor while the container grows, then comes back as the
+ * spring settles.
  */
 @Composable
 fun ExpandableGlassMenu(
@@ -38,12 +43,36 @@ fun ExpandableGlassMenu(
     modifier: Modifier = Modifier,
     labelSize: Dp = 55.dp,
     cornerRadius: Dp = 30.dp,
-    impact: Float = 0f,
     content: @Composable () -> Unit,
     label: @Composable () -> Unit,
 ) {
+    val density = LocalDensity.current
+    // The SwiftUI component only offsets the label, but on Android that motion
+    // is substantially less perceptible because the backdrop itself remains
+    // perfectly pinned while the label is rapidly blurred/faded. The reference
+    // video makes the physical "pop" read as the whole glass surface briefly
+    // travelling away from its anchor. This is kept small and is driven by the
+    // same progress/blur curve rather than a second independent animation.
+    val motionProgress = if (progress <= 0.5f) {
+        progress / 0.5f
+    } else {
+        (1f - progress) / 0.5f
+    }
+
     SubcomposeLayout(
         modifier = modifier
+            .graphicsLayer {
+                // Bottom-trailing anchor: lift the entire morphing surface
+                // up/left for the transient pop, then return it to the exact
+                // original location as the morph settles.
+                val travel = with(density) { 18.dp.toPx() } * motionProgress
+                translationX = -travel
+                translationY = -travel
+                val depth = (0.045f * motionProgress).coerceAtLeast(0f)
+                scaleX = 1f + depth
+                scaleY = 1f + depth
+                transformOrigin = TransformOrigin(1f, 1f)
+            }
             .drawBackdrop(
                 backdrop = backdrop,
                 shape = { RoundedRectangle(cornerRadius) },
@@ -53,7 +82,7 @@ fun ExpandableGlassMenu(
                     lens(
                         refractionHeight = 12.dp.toPx(),
                         refractionAmount = 22.dp.toPx(),
-                        depthEffect = true
+                        depthEffect = true,
                     )
                 },
                 highlight = { Highlight.Ambient },
@@ -61,120 +90,112 @@ fun ExpandableGlassMenu(
                     drawRect(
                         androidx.compose.ui.graphics.Color.White.copy(alpha = 0.22f)
                     )
-                }
+                },
             )
             .clickable(onClick = onClick)
     ) {
-        val density = this
-        val labelWidthPx = with(density) { labelSize.toPx().roundToInt() }
+        val labelWidthPx = with(this) { labelSize.toPx().roundToInt() }
         val labelHeightPx = labelWidthPx
 
-        val contentPlaceable = subcompose("expandable-content") {
+        val contentPlaceable = subcompose("content") {
             content()
         }[0].measure(
             Constraints(
                 minWidth = 0,
                 maxWidth = Constraints.Infinity,
                 minHeight = 0,
-                maxHeight = Constraints.Infinity
+                maxHeight = Constraints.Infinity,
             )
         )
 
         val contentWidth = contentPlaceable.width
         val contentHeight = contentPlaceable.height
 
-        // Keep the original SwiftUI morph math intact. We intentionally allow
-        // the spring to overshoot slightly instead of clamping progress first;
-        // that is what makes the morph itself participate in the bounce.
-        val widthPx = labelWidthPx +
-            ((contentWidth - labelWidthPx) * progress).roundToInt()
-        val heightPx = labelHeightPx +
-            ((contentHeight - labelHeightPx) * progress).roundToInt()
+        // SwiftUI:
+        // width = label + (content - label) * progress
+        // height = label + (content - label) * progress
+        // Do NOT clamp progress here: spring overshoot is intentional.
+        val widthPx = labelWidthPx + ((contentWidth - labelWidthPx) * progress).roundToInt()
+        val heightPx = labelHeightPx + ((contentHeight - labelHeightPx) * progress).roundToInt()
 
-        val safeWidth = max(labelWidthPx, widthPx)
-        val safeHeight = max(labelHeightPx, heightPx)
+        // Avoid invalid Compose layout sizes on the rare negative part of the
+        // closing spring, while preserving positive overshoot on opening.
+        val layoutWidth = max(1, widthPx)
+        val layoutHeight = max(1, heightPx)
 
-        val labelPlaceable = subcompose("expandable-label") {
+        val labelPlaceable = subcompose("label") {
             label()
-        }[0].measure(
-            Constraints.fixed(labelWidthPx, labelHeightPx)
-        )
+        }[0].measure(Constraints.fixed(labelWidthPx, labelHeightPx))
 
         val contentWidthSafe = max(1, contentWidth)
         val contentHeightSafe = max(1, contentHeight)
         val minAspectScale = min(
             labelWidthPx.toFloat() / contentWidthSafe.toFloat(),
-            labelHeightPx.toFloat() / contentHeightSafe.toFloat()
+            labelHeightPx.toFloat() / contentHeightSafe.toFloat(),
         )
-        val scaleDiff = 1f - minAspectScale
-        val contentScale = minAspectScale + (scaleDiff * progress)
+        val contentScale = minAspectScale + ((1f - minAspectScale) * progress)
 
-        val safeProgress = progress.coerceIn(0f, 1f)
-        val labelOpacity = (1f - min(safeProgress / 0.35f, 1f)).coerceIn(0f, 1f)
-        val contentOpacity = (max(safeProgress - 0.35f, 0f) / 0.65f).coerceIn(0f, 1f)
+        // Exact SwiftUI formulae. Clamp only at the final layer alpha because
+        // RenderNode alpha itself must remain in [0, 1]; the source calculations
+        // remain unbounded so the spring can overshoot naturally.
+        val labelOpacity = 1f - min(progress / 0.35f, 1f)
+        val contentOpacity = max(progress - 0.35f, 0f) / 0.65f
 
-        val blurProgress = if (safeProgress <= 0.5f) {
-            safeProgress / 0.5f
+        // Exact triangular blurProgress from SwiftUI, intentionally unbounded.
+        val blurProgress = if (progress <= 0.5f) {
+            progress / 0.5f
         } else {
-            (1f - safeProgress) / 0.5f
-        }.coerceIn(0f, 1f)
+            (1f - progress) / 0.5f
+        }
 
-        // A quick, non-linear depth impulse. The first half pushes the glass
-        // towards the bottom-right anchor ("into the screen"), then the return
-        // creates a subtle overshoot as the main spring expands.
-        val depthSquash = 1f - (0.055f * impact)
-        val depthScaleX = depthSquash + (0.012f * impact)
-        val depthScaleY = depthSquash - (0.010f * impact)
-        val depthTranslation = 8.dp.toPx() * impact
-        val depthAlphaBoost = 0.04f * impact
+        layout(layoutWidth, layoutHeight) {
+            // The content lives in a 55x55 frame aligned to bottom-trailing,
+            // then gets scaled around that same anchor. This is the crucial
+            // part of the SwiftUI structure: the expanded panel grows away
+            // from the original button instead of recentering the content.
+            val anchorFrameX = layoutWidth - labelWidthPx
+            val anchorFrameY = layoutHeight - labelHeightPx
 
-        layout(safeWidth, safeHeight) {
-            val contentX = safeWidth - contentWidth
-            val contentY = safeHeight - contentHeight
+            // Content is fixed-size inside the 55x55 anchor frame with
+            // bottom-trailing alignment, then scaled about its bottom-trailing
+            // corner. Its rendered bounds therefore emerge from the button.
+            val contentX = anchorFrameX + (labelWidthPx - contentWidth)
+            val contentY = anchorFrameY + (labelHeightPx - contentHeight)
 
             contentPlaceable.placeRelativeWithLayer(
                 x = contentX,
-                y = contentY
+                y = contentY,
             ) {
-                alpha = (contentOpacity + depthAlphaBoost).coerceIn(0f, 1f)
+                alpha = contentOpacity.coerceIn(0f, 1f)
                 transformOrigin = TransformOrigin(1f, 1f)
-                scaleX = contentScale * depthScaleX
-                scaleY = contentScale * depthScaleY
-                translationX = -depthTranslation * 0.18f
-                translationY = depthTranslation * 0.30f
+                scaleX = contentScale
+                scaleY = contentScale
             }
 
-            val labelX = safeWidth - labelWidthPx
-            val labelY = safeHeight - labelHeightPx
+            // Same 55x55 frame, same bottom-trailing anchor, then the original
+            // directional offset is applied. During the spring overshoot,
+            // blurProgress can briefly become negative, which makes the label
+            // reverse direction for the final rebound exactly as the SwiftUI
+            // formula permits.
+            val labelX = anchorFrameX
+            val labelY = anchorFrameY
+            val labelScale = 1f + (blurProgress * 0.45f)
+            val blurRadiusPx = (14.dp.toPx() * blurProgress).coerceAtLeast(0f)
 
             labelPlaceable.placeRelativeWithLayer(
                 x = labelX,
-                y = labelY
+                y = labelY,
             ) {
-                alpha = labelOpacity
+                alpha = labelOpacity.coerceIn(0f, 1f)
                 transformOrigin = TransformOrigin(1f, 1f)
-
-                val labelScale = 1f + (blurProgress * 0.45f)
-                scaleX = labelScale * depthScaleX
-                scaleY = labelScale * depthScaleY
-
-                translationX = -depthTranslation * 0.10f
-                translationY = -75.dp.toPx() * blurProgress + depthTranslation
-
-                val blurRadiusPx = 14.dp.toPx() * blurProgress
+                scaleX = labelScale
+                scaleY = labelScale
+                translationY = -75.dp.toPx() * blurProgress
                 renderEffect = if (blurRadiusPx > 0.01f) {
                     BlurEffect(blurRadiusPx, blurRadiusPx)
                 } else {
                     null
                 }
-            }
-
-            // The backdrop itself gets a tiny depth cue in addition to the
-            // library's refraction/depthEffect. It is intentionally subtle so
-            // the glass still reads as one physical surface.
-            if (abs(impact) > 0.001f) {
-                // Kept in layout scope to make the physical impulse part of the
-                // same frame as the geometry change; child layers carry the cue.
             }
         }
     }

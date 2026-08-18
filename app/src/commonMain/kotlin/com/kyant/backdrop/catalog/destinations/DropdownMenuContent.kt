@@ -1,9 +1,7 @@
 package com.kyant.backdrop.catalog.destinations
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -40,16 +38,13 @@ import com.kyant.backdrop.catalog.SendIcon
 import com.kyant.backdrop.catalog.ShareFilledIcon
 import com.kyant.backdrop.catalog.SwapIcon
 import com.kyant.backdrop.catalog.components.ExpandableGlassMenu
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 @Composable
 fun DropdownMenuContent() {
     val animationScope = rememberCoroutineScope()
     val progressAnimation = remember { Animatable(0f) }
-    val impactAnimation = remember { Animatable(0f) }
     var expanded by remember { mutableStateOf(false) }
-    var activeAnimation by remember { mutableStateOf<Job?>(null) }
 
     BackdropDemoScaffold { backdrop ->
         Box(
@@ -61,45 +56,23 @@ fun DropdownMenuContent() {
             ExpandableGlassMenu(
                 backdrop = backdrop,
                 progress = progressAnimation.value,
-                impact = impactAnimation.value,
                 onClick = {
-                    activeAnimation?.cancel()
-
                     val opening = !expanded
                     expanded = opening
                     val target = if (opening) 1f else 0f
 
-                    activeAnimation = animationScope.launch {
-                        // A very quick physical "press into the screen" impulse.
-                        // This is deliberately separate from the morph progress so
-                        // the glass can squash/dip before the larger shape takes over.
-                        launch {
-                            impactAnimation.snapTo(0f)
-                            impactAnimation.animateTo(
-                                targetValue = 1f,
-                                animationSpec = tween(durationMillis = 62)
-                            )
-                            impactAnimation.animateTo(
-                                targetValue = 0f,
-                                animationSpec = spring(
-                                    dampingRatio = 0.42f,
-                                    stiffness = 900f,
-                                    visibilityThreshold = 0.001f
-                                )
-                            )
-                        }
-
-                        // Much faster, under-damped spring than the previous 0.92
-                        // damping. The small damping lets width/height/scale all
-                        // overshoot together before settling, matching the energetic
-                        // SwiftUI .bouncy feel instead of a flat interpolation.
+                    animationScope.launch {
+                        // Drive ONE progress value. The component intentionally
+                        // consumes the raw spring value, including overshoot, so
+                        // width, height, scale, blur, label travel and opacity all
+                        // morph together as one physical object.
                         progressAnimation.animateTo(
                             targetValue = target,
                             animationSpec = spring(
-                                dampingRatio = 0.58f,
-                                stiffness = 1100f,
-                                visibilityThreshold = 0.001f
-                            )
+                                dampingRatio = 0.50f,
+                                stiffness = 900f,
+                                visibilityThreshold = 0.0005f,
+                            ),
                         )
                     }
                 },
