@@ -1,15 +1,16 @@
 package com.kyant.backdrop.catalog.components
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.offset
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.TransformOrigin
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.drawBackdrop
@@ -23,17 +24,16 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
- * Faithful Compose port of the supplied SwiftUI ExpandableGlassMenu.
+ * Compose port of the supplied SwiftUI ExpandableGlassMenu.
  *
- * The important detail is that `progress` is allowed to overshoot. SwiftUI's
- * Animatable protocol receives the spring's raw interpolated value; it is NOT
- * clamped to [0, 1]. That overshoot is what makes width/height, scale, blur,
- * label offset and label scale all participate in the same physical bounce.
+ * The component has one source of truth: `progress`.
  *
- * The bottom-right corner is the fixed anchor for this demo, exactly like the
- * original `.bottomTrailing` composition. The visible circular label travels
- * away from that anchor while the container grows, then comes back as the
- * spring settles.
+ * - The menu size morphs from the circular label size to the measured content size.
+ * - The label fades, blurs, scales and travels on the same progress curve.
+ * - The WHOLE glass surface drifts away from its initial button location while opening,
+ *   then settles at a small offset. This is deliberate for the Android demo so the
+ *   physical "button becomes panel" motion is visible instead of looking like a
+ *   rectangle growing underneath a stationary button.
  */
 @Composable
 fun ExpandableGlassMenu(
@@ -47,31 +47,36 @@ fun ExpandableGlassMenu(
     label: @Composable () -> Unit,
 ) {
     val density = LocalDensity.current
-    // The SwiftUI component only offsets the label, but on Android that motion
-    // is substantially less perceptible because the backdrop itself remains
-    // perfectly pinned while the label is rapidly blurred/faded. The reference
-    // video makes the physical "pop" read as the whole glass surface briefly
-    // travelling away from its anchor. This is kept small and is driven by the
-    // same progress/blur curve rather than a second independent animation.
-    val motionProgress = if (progress <= 0.5f) {
-        progress / 0.5f
-    } else {
-        (1f - progress) / 0.5f
-    }
+
+    /*
+     * Whole-surface physical travel.
+     *
+     * Unlike a graphics-layer-only translation, Modifier.offset changes the
+     * component's actual placed position, so the glass surface, the circular
+     * label, and the clickable area all move together. The parent remains
+     * bottom-end aligned, while the visible object drifts up/left as it morphs.
+     */
+    val clampedProgress = progress.coerceIn(0f, 1f)
+    val smoothProgress = clampedProgress * clampedProgress *
+        (3f - (2f * clampedProgress))
+
+    val settledDrift = with(density) { 28.dp.toPx() }
+    val transientDrift = with(density) { 6.dp.toPx() }
+    val openingOvershoot = max(progress - 1f, 0f)
+    val closingOvershoot = min(progress, 0f)
+
+    val drift =
+        (settledDrift * smoothProgress) +
+            (transientDrift * openingOvershoot) +
+            (transientDrift * closingOvershoot)
 
     SubcomposeLayout(
         modifier = modifier
-            .graphicsLayer {
-                // Bottom-trailing anchor: lift the entire morphing surface
-                // up/left for the transient pop, then return it to the exact
-                // original location as the morph settles.
-                val travel = with(density) { 18.dp.toPx() } * motionProgress
-                translationX = -travel
-                translationY = -travel
-                val depth = (0.045f * motionProgress).coerceAtLeast(0f)
-                scaleX = 1f + depth
-                scaleY = 1f + depth
-                transformOrigin = TransformOrigin(1f, 1f)
+            .offset {
+                IntOffset(
+                    x = -drift.roundToInt(),
+                    y = -drift.roundToInt(),
+                )
             }
             .drawBackdrop(
                 backdrop = backdrop,
@@ -111,15 +116,15 @@ fun ExpandableGlassMenu(
         val contentWidth = contentPlaceable.width
         val contentHeight = contentPlaceable.height
 
-        // SwiftUI:
-        // width = label + (content - label) * progress
-        // height = label + (content - label) * progress
-        // Do NOT clamp progress here: spring overshoot is intentional.
-        val widthPx = labelWidthPx + ((contentWidth - labelWidthPx) * progress).roundToInt()
-        val heightPx = labelHeightPx + ((contentHeight - labelHeightPx) * progress).roundToInt()
+        /*
+         * Preserve the SwiftUI interpolation, including small spring overshoot.
+         * The spring is responsible for the "rubbery" size response.
+         */
+        val widthPx =
+            labelWidthPx + ((contentWidth - labelWidthPx) * progress).roundToInt()
+        val heightPx =
+            labelHeightPx + ((contentHeight - labelHeightPx) * progress).roundToInt()
 
-        // Avoid invalid Compose layout sizes on the rare negative part of the
-        // closing spring, while preserving positive overshoot on opening.
         val layoutWidth = max(1, widthPx)
         val layoutHeight = max(1, heightPx)
 
@@ -129,19 +134,22 @@ fun ExpandableGlassMenu(
 
         val contentWidthSafe = max(1, contentWidth)
         val contentHeightSafe = max(1, contentHeight)
+
         val minAspectScale = min(
             labelWidthPx.toFloat() / contentWidthSafe.toFloat(),
             labelHeightPx.toFloat() / contentHeightSafe.toFloat(),
         )
-        val contentScale = minAspectScale + ((1f - minAspectScale) * progress)
+        val contentScale =
+            minAspectScale + ((1f - minAspectScale) * progress)
 
-        // Exact SwiftUI formulae. Clamp only at the final layer alpha because
-        // RenderNode alpha itself must remain in [0, 1]; the source calculations
-        // remain unbounded so the spring can overshoot naturally.
         val labelOpacity = 1f - min(progress / 0.35f, 1f)
         val contentOpacity = max(progress - 0.35f, 0f) / 0.65f
 
-        // Exact triangular blurProgress from SwiftUI, intentionally unbounded.
+        /*
+         * Exact SwiftUI triangular blur curve.
+         * Do not use abs()/clamp here: the spring's final overshoot gives the
+         * label a natural reverse pulse as it settles.
+         */
         val blurProgress = if (progress <= 0.5f) {
             progress / 0.5f
         } else {
@@ -149,16 +157,14 @@ fun ExpandableGlassMenu(
         }
 
         layout(layoutWidth, layoutHeight) {
-            // The content lives in a 55x55 frame aligned to bottom-trailing,
-            // then gets scaled around that same anchor. This is the crucial
-            // part of the SwiftUI structure: the expanded panel grows away
-            // from the original button instead of recentering the content.
+            /*
+             * The expanded surface is anchored from the bottom-right internally:
+             * the content and label occupy the same 55x55 anchor frame used by
+             * the SwiftUI implementation.
+             */
             val anchorFrameX = layoutWidth - labelWidthPx
             val anchorFrameY = layoutHeight - labelHeightPx
 
-            // Content is fixed-size inside the 55x55 anchor frame with
-            // bottom-trailing alignment, then scaled about its bottom-trailing
-            // corner. Its rendered bounds therefore emerge from the button.
             val contentX = anchorFrameX + (labelWidthPx - contentWidth)
             val contentY = anchorFrameY + (labelHeightPx - contentHeight)
 
@@ -172,30 +178,28 @@ fun ExpandableGlassMenu(
                 scaleY = contentScale
             }
 
-            // Same 55x55 frame, same bottom-trailing anchor, then the original
-            // directional offset is applied. During the spring overshoot,
-            // blurProgress can briefly become negative, which makes the label
-            // reverse direction for the final rebound exactly as the SwiftUI
-            // formula permits.
-            val labelX = anchorFrameX
-            val labelY = anchorFrameY
-            val labelScale = 1f + (blurProgress * 0.45f)
-            val blurRadiusPx = (14.dp.toPx() * blurProgress).coerceAtLeast(0f)
-
             labelPlaceable.placeRelativeWithLayer(
-                x = labelX,
-                y = labelY,
+                x = anchorFrameX,
+                y = anchorFrameY,
             ) {
+                val labelScale = 1f + (blurProgress * 0.45f)
+                val blurRadiusPx =
+                    (14.dp.toPx() * blurProgress).coerceAtLeast(0f)
+
                 alpha = labelOpacity.coerceIn(0f, 1f)
                 transformOrigin = TransformOrigin(1f, 1f)
                 scaleX = labelScale
                 scaleY = labelScale
+
+                // Original SwiftUI bottom-trailing offset.
                 translationY = -75.dp.toPx() * blurProgress
-                renderEffect = if (blurRadiusPx > 0.01f) {
-                    BlurEffect(blurRadiusPx, blurRadiusPx)
-                } else {
-                    null
-                }
+
+                renderEffect =
+                    if (blurRadiusPx > 0.01f) {
+                        BlurEffect(blurRadiusPx, blurRadiusPx)
+                    } else {
+                        null
+                    }
             }
         }
     }

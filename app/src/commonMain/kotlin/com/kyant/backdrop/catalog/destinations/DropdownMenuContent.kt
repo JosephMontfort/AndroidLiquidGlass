@@ -62,15 +62,15 @@ fun DropdownMenuContent() {
                     val target = if (opening) 1f else 0f
 
                     animationScope.launch {
-                        // Drive ONE progress value. The component intentionally
-                        // consumes the raw spring value, including overshoot, so
-                        // width, height, scale, blur, label travel and opacity all
-                        // morph together as one physical object.
+                        // One spring drives the entire physical morph. The component uses
+                        // the same value for geometry, label motion, blur and scale,
+                        // while the whole glass surface drifts from the original
+                        // circular button position into its expanded resting position.
                         progressAnimation.animateTo(
                             targetValue = target,
                             animationSpec = spring(
-                                dampingRatio = 0.50f,
-                                stiffness = 900f,
+                                dampingRatio = 0.72f,
+                                stiffness = 720f,
                                 visibilityThreshold = 0.0005f,
                             ),
                         )
