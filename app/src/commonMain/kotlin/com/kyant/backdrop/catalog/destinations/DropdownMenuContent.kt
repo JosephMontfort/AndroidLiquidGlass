@@ -120,7 +120,6 @@ enum class MenuAnimationPreset(val label: String) {
     Smooth("Smooth"),
     Snappy("Snappy");
 
-    // Dynamic specification based on whether the menu is actively closing
     fun getSpec(isClosing: Boolean = false): AnimationSpec<Float> = when (this) {
         Bouncy -> if (isClosing) spring(dampingRatio = 0.8f, stiffness = 300f) else spring(dampingRatio = 0.65f, stiffness = 250f)
         Smooth -> tween(durationMillis = 650, easing = FastOutSlowInEasing)
@@ -167,7 +166,6 @@ fun ExpandableGlassMenuContent() {
                     .height(340f.dp)
                     .clip(RoundedCornerShape(20f.dp))
                     .background(Color.Black.copy(alpha = 0.08f))
-                    // Re-keys gesture detection if the preset changes
                     .pointerInput(selectedPreset) {
                         detectTapGestures {
                             if (animatableProgress.value > 0.1f) {
@@ -207,7 +205,7 @@ fun ExpandableGlassMenuContent() {
                         contentColor = contentColor,
                         secondaryColor = secondaryColor,
                         isHovered = hoveredIndex == 0,
-                        onHover = { setHovered(0) },
+                        onHoverChange = { if (it) setHovered(0) else if (hoveredIndex == 0) setHovered(null) },
                         globalTouchPosition = globalTouch,
                         onClick = closeMenu
                     )
@@ -218,7 +216,7 @@ fun ExpandableGlassMenuContent() {
                         contentColor = contentColor,
                         secondaryColor = secondaryColor,
                         isHovered = hoveredIndex == 1,
-                        onHover = { setHovered(1) },
+                        onHoverChange = { if (it) setHovered(1) else if (hoveredIndex == 1) setHovered(null) },
                         globalTouchPosition = globalTouch,
                         onClick = closeMenu
                     )
@@ -229,7 +227,7 @@ fun ExpandableGlassMenuContent() {
                         contentColor = contentColor,
                         secondaryColor = secondaryColor,
                         isHovered = hoveredIndex == 2,
-                        onHover = { setHovered(2) },
+                        onHoverChange = { if (it) setHovered(2) else if (hoveredIndex == 2) setHovered(null) },
                         globalTouchPosition = globalTouch,
                         onClick = closeMenu
                     )
@@ -335,7 +333,7 @@ fun ExpandableGlassMenu(
     cornerRadius: Dp = 30f.dp,
     labelSize: Size = Size(55f, 55f),
     label: @Composable () -> Unit,
-    content: @Composable (globalTouchPosition: Offset, closeMenu: () -> Unit, hoveredIndex: Int?, setHovered: (Int) -> Unit) -> Unit
+    content: @Composable (globalTouchPosition: Offset, closeMenu: () -> Unit, hoveredIndex: Int?, setHovered: (Int?) -> Unit) -> Unit
 ) {
     val density = LocalDensity.current
     val viewConfiguration = LocalViewConfiguration.current
@@ -347,7 +345,7 @@ fun ExpandableGlassMenu(
     var labelCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
     
     var hoveredIndex by remember { mutableStateOf<Int?>(null) }
-    val setHovered: (Int) -> Unit = { hoveredIndex = it }
+    val setHovered: (Int?) -> Unit = { hoveredIndex = it }
 
     val labelSizePx = with(density) { Size(labelSize.width.dp.toPx(), labelSize.height.dp.toPx()) }
 
@@ -389,6 +387,8 @@ fun ExpandableGlassMenu(
                                 var isSimpleDrag = false
                                 var upEvent: androidx.compose.ui.input.pointer.PointerInputChange? = null
                                 
+                                val isExpanded = animatableProgress.value > 0.5f
+                                
                                 val timeoutResult = withTimeoutOrNull(tapTimeout) {
                                     while (true) {
                                         val event = awaitPointerEvent(PointerEventPass.Main)
@@ -399,14 +399,15 @@ fun ExpandableGlassMenu(
                                                 break
                                             } else if ((change.position - downPos).getDistance() > viewConfiguration.touchSlop) {
                                                 isSimpleDrag = true
-                                                break // Broken out before timeout = simple drag jelly effect!
+                                                break
                                             }
                                         }
                                     }
                                     true
                                 }
 
-                                if (timeoutResult == null) {
+                                // Long Press trigger if timeout expires without moving out of bounds
+                                if (timeoutResult == null && !isExpanded) {
                                     isLongPress = true
                                     animationScope.launch {
                                         animatableProgress.animateTo(1f, animationPreset.getSpec(isClosing = false))
@@ -421,26 +422,33 @@ fun ExpandableGlassMenu(
                                         tracking = false
                                     } else {
                                         dragOffset = change.position - downPos
-                                        if (isLongPress) {
+                                        // Update hover positions if we are expanded or actively expanding via long press
+                                        if (isLongPress || isExpanded) {
                                             globalTouchPosition = labelCoordinates?.localToWindow(change.position) ?: Offset.Unspecified
                                         }
                                         change.consume()
                                     }
                                 }
 
-                                if (upEvent != null && !isSimpleDrag && !isLongPress) {
+                                // Action on release
+                                if (upEvent != null && !isSimpleDrag && !isLongPress && timeoutResult != null) {
+                                    // A direct tap
                                     upEvent?.consume()
-                                    val target = if (animatableProgress.value > 0.5f) 0f else 1f
+                                    val target = if (isExpanded) 0f else 1f
                                     animationScope.launch {
                                         animatableProgress.animateTo(target, animationPreset.getSpec(isClosing = target == 0f))
                                     }
+                                } else if ((isSimpleDrag || isLongPress) && isExpanded) {
+                                    // Dragged in expanded state, execute action if hovered, or close if dragged outside.
+                                    if (dragOffset.getDistance() > 20f || hoveredIndex != null) {
+                                        closeMenu()
+                                    }
                                 }
                                 
+                                // Cleanup physical offsets entirely when finger lifts
                                 dragOffset = Offset.Zero
-                                if (isLongPress) {
-                                    globalTouchPosition = Offset.Unspecified
-                                    hoveredIndex = null // Instantly clears selection when finger is lifted
-                                }
+                                globalTouchPosition = Offset.Unspecified
+                                hoveredIndex = null
                             }
                         },
                     contentAlignment = Alignment.Center
@@ -505,15 +513,20 @@ fun GlassEffectContainer(
     val animatedDragX by animateFloatAsState(dragOffset.x, spring(stiffness = 400f, dampingRatio = 0.6f))
     val animatedDragY by animateFloatAsState(dragOffset.y, spring(stiffness = 400f, dampingRatio = 0.6f))
 
-    // Tighter glass-like stretch limit (2% Limit Expansion)
-    val stretchX = (1f + abs(animatedDragX) * 0.00015f - abs(animatedDragY) * 0.00015f).coerceIn(0.98f, 1.02f)
-    val stretchY = (1f + abs(animatedDragY) * 0.00015f - abs(animatedDragX) * 0.00015f).coerceIn(0.98f, 1.02f)
+    // Pull translation dynamically inverts based on progress
+    // When progress == 0f (collapsed), factor is +0.08f, matching finger movement naturally.
+    // When progress == 1f (expanded), factor is -0.03f, causing resistance in the opposite direction.
+    val dragMultiplier = 0.08f * (1f - progress) - 0.03f * progress
+
+    // Minimal glass-like bounds (Strict 1% Stretch tolerance)
+    val stretchX = (1f + abs(animatedDragX) * 0.00005f - abs(animatedDragY) * 0.00005f).coerceIn(0.99f, 1.01f)
+    val stretchY = (1f + abs(animatedDragY) * 0.00005f - abs(animatedDragX) * 0.00005f).coerceIn(0.99f, 1.01f)
 
     Box(
         modifier = Modifier
             .graphicsLayer {
-                translationX = -animatedDragX * 0.05f
-                translationY = offsetY - animatedDragY * 0.05f
+                translationX = animatedDragX * dragMultiplier
+                translationY = offsetY + animatedDragY * dragMultiplier
                 scaleX = squishScale * stretchX
                 scaleY = squishScale * stretchY
                 this.transformOrigin = transformOrigin
@@ -522,11 +535,13 @@ fun GlassEffectContainer(
                 backdrop = backdrop,
                 shape = { RoundedCornerShape(cornerRadius) },
                 effects = {
-                    // Ultra-lightweight blur during scale sequence for max performance
-                    blur((2f + 6f * blurProgress.coerceIn(0f, 1f)).dp.toPx())
+                    // Maximum fluidity: Only calculate basic linear blur while animating.
+                    blur((2f + 10f * blurProgress.coerceIn(0f, 1f)).dp.toPx())
+                    
+                    // Re-add high-cost matrix calculations only when structurally at rest
                     if (progress == 0f || progress == 1f) {
-                        vibrancy() // Only calculate color matrix bounds when fully settled
-                        lens(16f.dp.toPx(), 24f.dp.toPx(), depthEffect = false) // Cheaper flat lens
+                        vibrancy()
+                        lens(16f.dp.toPx(), 24f.dp.toPx(), depthEffect = false)
                     }
                 },
                 highlight = { Highlight.Default.copy(alpha = 0.65f) },
@@ -575,19 +590,20 @@ fun MenuRow(
     contentColor: Color,
     secondaryColor: Color,
     isHovered: Boolean,
-    onHover: () -> Unit,
+    onHoverChange: (Boolean) -> Unit,
     globalTouchPosition: Offset,
     onClick: () -> Unit
 ) {
     var rowCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
     
+    // Pure bounds checking allows the finger leaving the window to un-select entirely
     val contains = remember(globalTouchPosition, rowCoords) {
         if (globalTouchPosition.isUnspecified || rowCoords == null) false
         else rowCoords!!.boundsInWindow().contains(globalTouchPosition)
     }
     
     LaunchedEffect(contains) {
-        if (contains) onHover()
+        onHoverChange(contains)
     }
 
     val hoverAlpha by animateFloatAsState(if (isHovered) 0.1f else 0f, tween(150))
