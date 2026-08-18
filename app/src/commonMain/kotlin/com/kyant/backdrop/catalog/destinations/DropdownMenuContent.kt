@@ -504,9 +504,9 @@ fun GlassEffectContainer(
     val animatedDragX by animateFloatAsState(dragOffset.x, spring(stiffness = 400f, dampingRatio = 0.6f))
     val animatedDragY by animateFloatAsState(dragOffset.y, spring(stiffness = 400f, dampingRatio = 0.6f))
 
-    // Organically limiting squish/stretch with coerceIn (5% Limit Expansion)
-    val stretchX = (1f + abs(animatedDragX) * 0.0003f - abs(animatedDragY) * 0.0003f).coerceIn(0.95f, 1.05f)
-    val stretchY = (1f + abs(animatedDragY) * 0.0003f - abs(animatedDragX) * 0.0003f).coerceIn(0.95f, 1.05f)
+    // Tighter glass-like stretch limit (2% Limit Expansion)
+    val stretchX = (1f + abs(animatedDragX) * 0.00015f - abs(animatedDragY) * 0.00015f).coerceIn(0.98f, 1.02f)
+    val stretchY = (1f + abs(animatedDragY) * 0.00015f - abs(animatedDragX) * 0.00015f).coerceIn(0.98f, 1.02f)
 
     Box(
         modifier = Modifier
@@ -521,10 +521,11 @@ fun GlassEffectContainer(
                 backdrop = backdrop,
                 shape = { RoundedCornerShape(cornerRadius) },
                 effects = {
-                    vibrancy()
-                    blur((2f + 12f * blurProgress.coerceIn(0f, 1f)).dp.toPx())
+                    // Ultra-lightweight blur during scale sequence for max performance
+                    blur((2f + 6f * blurProgress.coerceIn(0f, 1f)).dp.toPx())
                     if (progress == 0f || progress == 1f) {
-                        lens(16f.dp.toPx(), 24f.dp.toPx(), depthEffect = true)
+                        vibrancy() // Only calculate color matrix bounds when fully settled
+                        lens(16f.dp.toPx(), 24f.dp.toPx(), depthEffect = false) // Cheaper flat lens
                     }
                 },
                 highlight = { Highlight.Default.copy(alpha = 0.65f) },
