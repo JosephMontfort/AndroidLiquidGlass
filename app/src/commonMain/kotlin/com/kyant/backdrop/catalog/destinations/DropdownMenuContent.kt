@@ -439,6 +439,7 @@ fun ExpandableGlassMenu(
                                 dragOffset = Offset.Zero
                                 if (isLongPress) {
                                     globalTouchPosition = Offset.Unspecified
+                                    hoveredIndex = null // Instantly clears selection when finger is lifted
                                 }
                             }
                         },
