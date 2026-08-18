@@ -55,6 +55,7 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
@@ -62,6 +63,7 @@ import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -151,8 +153,11 @@ fun ExpandableGlassMenuContent() {
     var refractionHeightDp by remember { mutableFloatStateOf(16f) }
     var refractionAmountDp by remember { mutableFloatStateOf(20f) }
     var chromaticAberration by remember { mutableStateOf(false) }
+    
     var horizontalOffsetDp by remember { mutableFloatStateOf(0f) }
     var verticalOffsetDp by remember { mutableFloatStateOf(0f) }
+    
+    var isHapticsEnabled by remember { mutableStateOf(true) }
 
     val animationScope = rememberCoroutineScope()
     val animatableProgress = remember { Animatable(0f) }
@@ -183,6 +188,7 @@ fun ExpandableGlassMenuContent() {
                     alignment = selectedAlignment,
                     backdrop = backdrop,
                     isGlassEnabled = isGlassEnabled,
+                    isHapticsEnabled = isHapticsEnabled,
                     cornerRadius = cornerRadiusDp.dp,
                     blurRadius = blurRadiusDp,
                     refractionHeight = refractionHeightDp,
@@ -241,6 +247,11 @@ fun ExpandableGlassMenuContent() {
                 }
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    BasicText("Haptic Feedback", style = TextStyle(contentColor, 14f.sp))
+                    LiquidToggle(selected = { isHapticsEnabled }, onSelect = { isHapticsEnabled = it }, backdrop = controlsBackdrop)
+                }
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     BasicText("Glass Effect", style = TextStyle(contentColor, 14f.sp))
                     LiquidToggle(selected = { isGlassEnabled }, onSelect = { isGlassEnabled = it }, backdrop = controlsBackdrop)
                 }
@@ -288,6 +299,7 @@ fun ExpandableGlassMenu(
     alignment: MenuAlignment,
     backdrop: Backdrop,
     isGlassEnabled: Boolean,
+    isHapticsEnabled: Boolean,
     cornerRadius: Dp,
     blurRadius: Float,
     refractionHeight: Float,
@@ -302,11 +314,13 @@ fun ExpandableGlassMenu(
 ) {
     val density = LocalDensity.current
     val viewConfiguration = LocalViewConfiguration.current
+    val haptic = LocalHapticFeedback.current
     val animationScope = rememberCoroutineScope()
     
     var contentMeasuredSize by remember { mutableStateOf(Size.Zero) }
     var dragOffset by remember { mutableStateOf(Offset.Zero) }
     var isPressed by remember { mutableStateOf(false) }
+    var isDragging by remember { mutableStateOf(false) }
     var globalTouchPosition by remember { mutableStateOf(Offset.Unspecified) }
     var labelCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
     
@@ -315,13 +329,15 @@ fun ExpandableGlassMenu(
 
     val labelSizePx = with(density) { Size(labelSize.width.dp.toPx(), labelSize.height.dp.toPx()) }
 
+    LaunchedEffect(hoveredIndex) {
+        if (isHapticsEnabled && isDragging && hoveredIndex != null) {
+            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        }
+    }
+
     val closeMenu: () -> Unit = {
         hoveredIndex = null
         animationScope.launch { animatableProgress.animateTo(0f, animationPreset.getSpec(isClosing = true)) }
-    }
-
-    LaunchedEffect(animatableProgress.value) {
-        if (animatableProgress.value == 0f) hoveredIndex = null
     }
 
     Box(modifier = modifier.fillMaxSize(), contentAlignment = alignment.composeAlignment) {
@@ -355,7 +371,7 @@ fun ExpandableGlassMenu(
                                 var isSimpleDrag = false
                                 var upEvent: androidx.compose.ui.input.pointer.PointerInputChange? = null
                                 
-                                val isExpanded = animatableProgress.value > 0.5f
+                                val isCurrentlyExpanded = animatableProgress.targetValue > 0.5f
                                 
                                 val timeoutResult = withTimeoutOrNull(tapTimeout) {
                                     while (true) {
@@ -374,12 +390,13 @@ fun ExpandableGlassMenu(
                                     true
                                 }
 
-                                if (timeoutResult == null && !isExpanded) {
+                                if (timeoutResult == null && !isCurrentlyExpanded) {
                                     isLongPress = true
                                     animationScope.launch { animatableProgress.animateTo(1f, animationPreset.getSpec(isClosing = false)) }
                                 }
 
                                 var tracking = upEvent == null
+                                isDragging = true
                                 while (tracking) {
                                     val event = awaitPointerEvent(PointerEventPass.Main)
                                     val change = event.changes.firstOrNull()
@@ -387,7 +404,7 @@ fun ExpandableGlassMenu(
                                         tracking = false
                                     } else {
                                         dragOffset = change.position - downPos
-                                        if (isLongPress || isExpanded) {
+                                        if (isLongPress || isCurrentlyExpanded) {
                                             globalTouchPosition = labelCoordinates?.localToWindow(change.position) ?: Offset.Unspecified
                                         }
                                         change.consume()
@@ -395,20 +412,24 @@ fun ExpandableGlassMenu(
                                 }
 
                                 isPressed = false
+                                isDragging = false
+                                val finalHoveredIndex = hoveredIndex
 
+                                // Pure release interaction processing
                                 if (upEvent != null && !isSimpleDrag && !isLongPress && timeoutResult != null) {
-                                    upEvent?.consume()
-                                    val target = if (isExpanded) 0f else 1f
+                                    upEvent.consume()
+                                    val target = if (isCurrentlyExpanded) 0f else 1f
                                     animationScope.launch { animatableProgress.animateTo(target, animationPreset.getSpec(isClosing = target == 0f)) }
-                                } else if ((isSimpleDrag || isLongPress) && isExpanded) {
-                                    if (dragOffset.getDistance() > 20f || hoveredIndex != null) {
+                                } else if ((isSimpleDrag || isLongPress) && isCurrentlyExpanded) {
+                                    if (finalHoveredIndex != null || dragOffset.getDistance() > 20f) {
                                         closeMenu()
                                     }
                                 }
                                 
+                                // Hard reset physics and coordinate bounds immediately
                                 dragOffset = Offset.Zero
                                 globalTouchPosition = Offset.Unspecified
-                                hoveredIndex = null
+                                if (animatableProgress.targetValue == 0f) hoveredIndex = null
                             }
                         },
                     contentAlignment = Alignment.Center

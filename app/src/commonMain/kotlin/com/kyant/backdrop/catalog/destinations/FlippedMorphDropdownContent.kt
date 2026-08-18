@@ -48,8 +48,10 @@ import androidx.compose.ui.geometry.isUnspecified
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
@@ -57,12 +59,14 @@ import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.toSize
 import androidx.compose.ui.util.fastCoerceAtMost
 import androidx.compose.ui.util.lerp
 import com.kyant.backdrop.Backdrop
@@ -111,6 +115,8 @@ fun FlippedMorphDropdownContent() {
     
     var horizontalOffsetDp by remember { mutableFloatStateOf(0f) }
     var verticalOffsetDp by remember { mutableFloatStateOf(0f) }
+    
+    var isHapticsEnabled by remember { mutableStateOf(true) }
 
     val animationScope = rememberCoroutineScope()
     val animatableProgress = remember { Animatable(0f) }
@@ -141,6 +147,7 @@ fun FlippedMorphDropdownContent() {
                     alignment = selectedAlignment,
                     backdrop = backdrop,
                     isGlassEnabled = isGlassEnabled,
+                    isHapticsEnabled = isHapticsEnabled,
                     cornerRadius = cornerRadiusDp.dp,
                     blurRadius = blurRadiusDp,
                     refractionHeight = refractionHeightDp,
@@ -155,9 +162,9 @@ fun FlippedMorphDropdownContent() {
                         }
                     }
                 ) { globalTouch, closeMenu, hoveredIndex, setHovered ->
-                    MenuRow(SendIcon, "Send", "This is a sample text description", contentColor, secondaryColor, hoveredIndex == 0, { if (it) setHovered(0) else if (hoveredIndex == 0) setHovered(null) }, globalTouchPosition = globalTouch, onClick = closeMenu)
-                    MenuRow(SwapIcon, "Swap", "This is a sample text description", contentColor, secondaryColor, hoveredIndex == 1, { if (it) setHovered(1) else if (hoveredIndex == 1) setHovered(null) }, globalTouchPosition = globalTouch, onClick = closeMenu)
-                    MenuRow(ReceiveIcon, "Receive", "This is a sample text description", contentColor, secondaryColor, hoveredIndex == 2, { if (it) setHovered(2) else if (hoveredIndex == 2) setHovered(null) }, globalTouchPosition = globalTouch, onClick = closeMenu)
+                    FlippedMenuRow(SendIcon, "Send", "This is a sample text description", contentColor, secondaryColor, hoveredIndex == 0, { if (it) setHovered(0) else if (hoveredIndex == 0) setHovered(null) }, globalTouchPosition = globalTouch, onClick = closeMenu)
+                    FlippedMenuRow(SwapIcon, "Swap", "This is a sample text description", contentColor, secondaryColor, hoveredIndex == 1, { if (it) setHovered(1) else if (hoveredIndex == 1) setHovered(null) }, globalTouchPosition = globalTouch, onClick = closeMenu)
+                    FlippedMenuRow(ReceiveIcon, "Receive", "This is a sample text description", contentColor, secondaryColor, hoveredIndex == 2, { if (it) setHovered(2) else if (hoveredIndex == 2) setHovered(null) }, globalTouchPosition = globalTouch, onClick = closeMenu)
                 }
             }
 
@@ -196,6 +203,11 @@ fun FlippedMorphDropdownContent() {
                             }
                         }
                     }
+                }
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    BasicText("Haptic Feedback", style = TextStyle(contentColor, 14f.sp))
+                    LiquidToggle(selected = { isHapticsEnabled }, onSelect = { isHapticsEnabled = it }, backdrop = controlsBackdrop)
                 }
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -246,6 +258,7 @@ fun FlippedExpandableGlassMenu(
     alignment: MenuAlignment,
     backdrop: Backdrop,
     isGlassEnabled: Boolean,
+    isHapticsEnabled: Boolean,
     cornerRadius: Dp,
     blurRadius: Float,
     refractionHeight: Float,
@@ -260,11 +273,13 @@ fun FlippedExpandableGlassMenu(
 ) {
     val density = LocalDensity.current
     val viewConfiguration = LocalViewConfiguration.current
+    val haptic = LocalHapticFeedback.current
     val animationScope = rememberCoroutineScope()
     
     var contentMeasuredSize by remember { mutableStateOf(Size.Zero) }
     var dragOffset by remember { mutableStateOf(Offset.Zero) }
     var isPressed by remember { mutableStateOf(false) }
+    var isDragging by remember { mutableStateOf(false) }
     var globalTouchPosition by remember { mutableStateOf(Offset.Unspecified) }
     var labelCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
     
@@ -272,6 +287,12 @@ fun FlippedExpandableGlassMenu(
     val setHovered: (Int?) -> Unit = { hoveredIndex = it }
 
     val labelSizePx = with(density) { Size(labelSize.width.dp.toPx(), labelSize.height.dp.toPx()) }
+
+    LaunchedEffect(hoveredIndex) {
+        if (isHapticsEnabled && isDragging && hoveredIndex != null) {
+            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        }
+    }
 
     val closeMenu: () -> Unit = {
         hoveredIndex = null
@@ -313,7 +334,7 @@ fun FlippedExpandableGlassMenu(
                                 var isSimpleDrag = false
                                 var upEvent: androidx.compose.ui.input.pointer.PointerInputChange? = null
                                 
-                                val isExpanded = animatableProgress.value > 0.5f
+                                val isCurrentlyExpanded = animatableProgress.targetValue > 0.5f
                                 
                                 val timeoutResult = withTimeoutOrNull(tapTimeout) {
                                     while (true) {
@@ -332,12 +353,13 @@ fun FlippedExpandableGlassMenu(
                                     true
                                 }
 
-                                if (timeoutResult == null && !isExpanded) {
+                                if (timeoutResult == null && !isCurrentlyExpanded) {
                                     isLongPress = true
                                     animationScope.launch { animatableProgress.animateTo(1f, animationPreset.getSpec(isClosing = false)) }
                                 }
 
                                 var tracking = upEvent == null
+                                isDragging = true
                                 while (tracking) {
                                     val event = awaitPointerEvent(PointerEventPass.Main)
                                     val change = event.changes.firstOrNull()
@@ -345,7 +367,7 @@ fun FlippedExpandableGlassMenu(
                                         tracking = false
                                     } else {
                                         dragOffset = change.position - downPos
-                                        if (isLongPress || isExpanded) {
+                                        if (isLongPress || isCurrentlyExpanded) {
                                             globalTouchPosition = labelCoordinates?.localToWindow(change.position) ?: Offset.Unspecified
                                         }
                                         change.consume()
@@ -353,20 +375,22 @@ fun FlippedExpandableGlassMenu(
                                 }
 
                                 isPressed = false
+                                isDragging = false
+                                val finalHoveredIndex = hoveredIndex
 
                                 if (upEvent != null && !isSimpleDrag && !isLongPress && timeoutResult != null) {
-                                    upEvent?.consume()
-                                    val target = if (isExpanded) 0f else 1f
+                                    upEvent.consume()
+                                    val target = if (isCurrentlyExpanded) 0f else 1f
                                     animationScope.launch { animatableProgress.animateTo(target, animationPreset.getSpec(isClosing = target == 0f)) }
-                                } else if ((isSimpleDrag || isLongPress) && isExpanded) {
-                                    if (dragOffset.getDistance() > 20f || hoveredIndex != null) {
+                                } else if ((isSimpleDrag || isLongPress) && isCurrentlyExpanded) {
+                                    if (finalHoveredIndex != null || dragOffset.getDistance() > 20f) {
                                         closeMenu()
                                     }
                                 }
                                 
                                 dragOffset = Offset.Zero
                                 globalTouchPosition = Offset.Unspecified
-                                hoveredIndex = null
+                                if (animatableProgress.targetValue == 0f) hoveredIndex = null
                             }
                         },
                     contentAlignment = Alignment.Center
@@ -492,5 +516,41 @@ fun FlippedGlassEffectContainer(
     ) {
         Box(modifier = Modifier.wrapContentSize(unbounded = true, align = alignment.composeAlignment).graphicsLayer { alpha = contentProgress; scaleX = contentScale; scaleY = contentScale; rotationX = 180f * progress; this.transformOrigin = transformOrigin }) { content() }
         Box(modifier = Modifier.graphicsLayer { alpha = 1f - labelOpacity }) { label() }
+    }
+}
+
+@Composable
+fun FlippedMenuRow(
+    icon: ImageVector,
+    title: String,
+    description: String,
+    contentColor: Color,
+    secondaryColor: Color,
+    isHovered: Boolean,
+    onHoverChange: (Boolean) -> Unit,
+    globalTouchPosition: Offset,
+    onClick: () -> Unit
+) {
+    var rowCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    
+    val contains = remember(globalTouchPosition, rowCoords) {
+        if (globalTouchPosition.isUnspecified || rowCoords == null) false
+        else rowCoords!!.boundsInWindow().contains(globalTouchPosition)
+    }
+    
+    LaunchedEffect(contains) { onHoverChange(contains) }
+
+    val hoverAlpha by animateFloatAsState(if (isHovered) 0.1f else 0f, tween(150))
+
+    Row(
+        modifier = Modifier.fillMaxWidth().onGloballyPositioned { rowCoords = it }.clip(RoundedCornerShape(14f.dp)).clickable { onClick() }.background(contentColor.copy(alpha = hoverAlpha)).padding(horizontal = 10f.dp, vertical = 6f.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14f.dp)
+    ) {
+        Box(modifier = Modifier.size(24f.dp).paint(rememberVectorPainter(icon), colorFilter = ColorFilter.tint(contentColor)))
+        Column(verticalArrangement = Arrangement.spacedBy(2f.dp)) {
+            BasicText(title, style = TextStyle(contentColor, 15f.sp, FontWeight.SemiBold))
+            BasicText(description, style = TextStyle(secondaryColor, 12f.sp), maxLines = 1)
+        }
     }
 }
