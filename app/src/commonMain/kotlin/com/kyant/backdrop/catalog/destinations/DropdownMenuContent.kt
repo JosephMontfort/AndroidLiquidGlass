@@ -132,12 +132,12 @@ enum class MenuAlignment(val label: String) {
 enum class MenuAnimationPreset(val label: String) {
     Bouncy("Bouncy"), Smooth("Smooth"), Snappy("Snappy");
 
-    fun getSpec(isClosing: Boolean = false): AnimationSpec<Float> = when (this) {
+    fun getSpec(isClosing: Boolean = false, speedMultiplier: Float = 1f): AnimationSpec<Float> = when (this) {
         // Ultra-soft settling via lower stiffness and precise threshold
-        Bouncy -> if (isClosing) spring(dampingRatio = 0.8f, stiffness = 200f, visibilityThreshold = 0.001f) 
-                  else spring(dampingRatio = 0.55f, stiffness = 120f, visibilityThreshold = 0.001f)
-        Smooth -> tween(durationMillis = 650, easing = FastOutSlowInEasing)
-        Snappy -> spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow)
+        Bouncy -> if (isClosing) spring(dampingRatio = 0.8f, stiffness = 200f * (speedMultiplier * speedMultiplier), visibilityThreshold = 0.001f) 
+                  else spring(dampingRatio = 0.55f, stiffness = 120f * (speedMultiplier * speedMultiplier), visibilityThreshold = 0.001f)
+        Smooth -> tween(durationMillis = (650f / speedMultiplier).toInt(), easing = FastOutSlowInEasing)
+        Snappy -> spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow * (speedMultiplier * speedMultiplier))
     }
 }
 
@@ -150,6 +150,7 @@ fun ExpandableGlassMenuContent() {
 
     var selectedAlignment by remember { mutableStateOf(MenuAlignment.TopLeading) }
     var selectedPreset by remember { mutableStateOf(MenuAnimationPreset.Bouncy) }
+    var animationSpeedMultiplier by remember { mutableFloatStateOf(1f) }
 
     var isGlassEnabled by remember { mutableStateOf(true) }
     var cornerRadiusDp by remember { mutableFloatStateOf(30f) }
@@ -177,10 +178,10 @@ fun ExpandableGlassMenuContent() {
 
             Box(
                 modifier = Modifier.fillMaxWidth().height(340f.dp).clip(RoundedCornerShape(20f.dp)).background(Color.Black.copy(alpha = 0.08f))
-                    .pointerInput(selectedPreset) {
+                    .pointerInput(selectedPreset, animationSpeedMultiplier) {
                         detectTapGestures {
                             if (animatableProgress.value > 0.1f) {
-                                animationScope.launch { animatableProgress.animateTo(0f, selectedPreset.getSpec(isClosing = true)) }
+                                animationScope.launch { animatableProgress.animateTo(0f, selectedPreset.getSpec(isClosing = true, speedMultiplier = animationSpeedMultiplier)) }
                             }
                         }
                     }
@@ -188,6 +189,7 @@ fun ExpandableGlassMenuContent() {
                 ExpandableGlassMenu(
                     animatableProgress = animatableProgress,
                     animationPreset = selectedPreset,
+                    animationSpeedMultiplier = animationSpeedMultiplier,
                     alignment = selectedAlignment,
                     backdrop = backdrop,
                     isGlassEnabled = isGlassEnabled,
@@ -243,11 +245,16 @@ fun ExpandableGlassMenuContent() {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8f.dp)) {
                         MenuAnimationPreset.entries.forEach { preset ->
                             val isSelected = selectedPreset == preset
-                            LiquidButton(onClick = { selectedPreset = preset; val target = if (animatableProgress.value > 0.5f) 0f else 1f; animationScope.launch { animatableProgress.animateTo(target, preset.getSpec(isClosing = target == 0f)) } }, backdrop = controlsBackdrop, modifier = Modifier.weight(1f).height(42f.dp), tint = if (isSelected) Color(0xFF0088FF) else Color.Unspecified, surfaceColor = if (isSelected) Color.Unspecified else Color.White.copy(0.15f)) {
+                            LiquidButton(onClick = { selectedPreset = preset; val target = if (animatableProgress.value > 0.5f) 0f else 1f; animationScope.launch { animatableProgress.animateTo(target, preset.getSpec(isClosing = target == 0f, speedMultiplier = animationSpeedMultiplier)) } }, backdrop = controlsBackdrop, modifier = Modifier.weight(1f).height(42f.dp), tint = if (isSelected) Color(0xFF0088FF) else Color.Unspecified, surfaceColor = if (isSelected) Color.Unspecified else Color.White.copy(0.15f)) {
                                 BasicText(preset.label, style = TextStyle(if (isSelected) Color.White else contentColor, 13f.sp, FontWeight.Medium))
                             }
                         }
                     }
+                }
+
+                Column(verticalArrangement = Arrangement.spacedBy(8f.dp)) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { BasicText("Animation Speed", style = TextStyle(contentColor, 14f.sp)); BasicText("${((animationSpeedMultiplier * 10f).toInt()) / 10f}x", style = TextStyle(secondaryColor, 14f.sp)) }
+                    LiquidSlider(value = { animationSpeedMultiplier }, onValueChange = { animationSpeedMultiplier = it }, valueRange = 0.2f..3f, visibilityThreshold = 0.1f, backdrop = controlsBackdrop)
                 }
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -299,6 +306,7 @@ fun ExpandableGlassMenuContent() {
 fun ExpandableGlassMenu(
     animatableProgress: Animatable<Float, *>,
     animationPreset: MenuAnimationPreset,
+    animationSpeedMultiplier: Float = 1f,
     alignment: MenuAlignment,
     backdrop: Backdrop,
     isGlassEnabled: Boolean,
@@ -340,7 +348,7 @@ fun ExpandableGlassMenu(
 
     val closeMenu: () -> Unit = {
         hoveredIndex = null
-        animationScope.launch { animatableProgress.animateTo(0f, animationPreset.getSpec(isClosing = true)) }
+        animationScope.launch { animatableProgress.animateTo(0f, animationPreset.getSpec(isClosing = true, speedMultiplier = animationSpeedMultiplier)) }
     }
 
     Box(modifier = modifier.fillMaxSize(), contentAlignment = alignment.composeAlignment) {
@@ -363,7 +371,7 @@ fun ExpandableGlassMenu(
             label = {
                 Box(
                     modifier = Modifier.size(with(density) { labelSizePx.width.toDp() }).onGloballyPositioned { labelCoordinates = it }
-                        .pointerInput(animationPreset) {
+                        .pointerInput(animationPreset, animationSpeedMultiplier) {
                             awaitEachGesture {
                                 val down = awaitFirstDown(requireUnconsumed = false)
                                 isPressed = true
@@ -395,7 +403,7 @@ fun ExpandableGlassMenu(
 
                                 if (timeoutResult == null && !isExpanded) {
                                     isLongPress = true
-                                    animationScope.launch { animatableProgress.animateTo(1f, animationPreset.getSpec(isClosing = false)) }
+                                    animationScope.launch { animatableProgress.animateTo(1f, animationPreset.getSpec(isClosing = false, speedMultiplier = animationSpeedMultiplier)) }
                                 }
 
                                 var tracking = upEvent == null
@@ -421,7 +429,7 @@ fun ExpandableGlassMenu(
                                 if (upEvent != null && !isSimpleDrag && !isLongPress && timeoutResult != null) {
                                     upEvent.consume()
                                     val target = if (isExpanded) 0f else 1f
-                                    animationScope.launch { animatableProgress.animateTo(target, animationPreset.getSpec(isClosing = target == 0f)) }
+                                    animationScope.launch { animatableProgress.animateTo(target, animationPreset.getSpec(isClosing = target == 0f, speedMultiplier = animationSpeedMultiplier)) }
                                 } else if ((isSimpleDrag || isLongPress) && isExpanded) {
                                     if (finalHoveredIndex != null || dragOffset.getDistance() > 20f) {
                                         closeMenu()
