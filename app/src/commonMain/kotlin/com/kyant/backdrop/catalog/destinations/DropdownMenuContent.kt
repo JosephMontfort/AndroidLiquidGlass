@@ -31,6 +31,8 @@ import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -51,6 +53,7 @@ import androidx.compose.ui.geometry.isUnspecified
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -68,12 +71,14 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.toSize
 import androidx.compose.ui.util.fastCoerceAtMost
 import androidx.compose.ui.util.lerp
+import androidx.compose.ui.window.Dialog
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.kyant.backdrop.catalog.BackdropDemoScaffold
@@ -141,25 +146,74 @@ enum class MenuAnimationPreset(val label: String) {
     }
 }
 
-// Dedicated Tuning Component for exposing Physics values to the UI
+// Universal Tuning Component for exposing Physics & Values to the UI
 @Composable
-fun AdvancedTuningControl(
+fun TuningControl(
     name: String,
-    description: String,
+    description: String? = null,
     value: Float,
+    defaultValue: Float,
     onValueChange: (Float) -> Unit,
     valueRange: ClosedFloatingPointRange<Float>,
-    displayValue: String,
+    formatValue: (Float) -> String,
     backdrop: Backdrop,
     contentColor: Color,
     secondaryColor: Color
 ) {
+    var showCustomInputDialog by remember { mutableStateOf(false) }
+    var customInputValue by remember { mutableStateOf("") }
+    
+    val isLightTheme = !isSystemInDarkTheme()
+    val dialogBg = if (isLightTheme) Color(0xFFF0F0F0) else Color(0xFF222222)
+    val fieldBg = if (isLightTheme) Color.White else Color.Black.copy(alpha = 0.3f)
+
+    if (showCustomInputDialog) {
+        Dialog(onDismissRequest = { showCustomInputDialog = false }) {
+            Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(dialogBg).padding(20.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    BasicText("Set value for $name", style = TextStyle(contentColor, 16.sp, FontWeight.SemiBold))
+                    BasicTextField(
+                        value = customInputValue,
+                        onValueChange = { customInputValue = it },
+                        textStyle = TextStyle(contentColor, 16.sp),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        cursorBrush = SolidColor(contentColor),
+                        modifier = Modifier.fillMaxWidth().background(fieldBg, RoundedCornerShape(8.dp)).padding(12.dp)
+                    )
+                    Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
+                        BasicText("Cancel", modifier = Modifier.clickable { showCustomInputDialog = false }.padding(8.dp), style = TextStyle(secondaryColor, 14.sp))
+                        Spacer(Modifier.width(16.dp))
+                        BasicText("Apply", modifier = Modifier.clickable {
+                            customInputValue.toFloatOrNull()?.let { onValueChange(it) }
+                            showCustomInputDialog = false
+                        }.padding(8.dp), style = TextStyle(Color(0xFF0088FF), 14.sp, FontWeight.Bold))
+                    }
+                }
+            }
+        }
+    }
+
     Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             BasicText(name, style = TextStyle(contentColor, 14.sp, FontWeight.SemiBold))
-            BasicText(displayValue, style = TextStyle(secondaryColor, 13.sp, FontWeight.Medium))
+            
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (abs(value - defaultValue) > 0.001f) {
+                    BasicText("Reset", modifier = Modifier.clickable { onValueChange(defaultValue) }, style = TextStyle(Color(0xFF0088FF), 12.sp, FontWeight.Medium))
+                }
+                Box(modifier = Modifier.pointerInput(Unit) {
+                    detectTapGestures(onLongPress = {
+                        customInputValue = value.toString()
+                        showCustomInputDialog = true
+                    })
+                }) {
+                    BasicText(formatValue(value), style = TextStyle(secondaryColor, 13.sp, FontWeight.Medium))
+                }
+            }
         }
-        BasicText(description, style = TextStyle(secondaryColor, 12.sp, lineHeight = 16.sp), modifier = Modifier.padding(bottom = 2.dp))
+        if (description != null) {
+            BasicText(description, style = TextStyle(secondaryColor, 12.sp, lineHeight = 16.sp), modifier = Modifier.padding(bottom = 2.dp))
+        }
         LiquidSlider(value = { value }, onValueChange = onValueChange, valueRange = valueRange, visibilityThreshold = 0.001f, backdrop = backdrop)
     }
 }
@@ -186,7 +240,7 @@ fun ExpandableGlassMenuContent() {
     var horizontalOffsetDp by remember { mutableFloatStateOf(0f) }
     var verticalOffsetDp by remember { mutableFloatStateOf(0f) }
 
-    // Advanced Physics Tuning State (with default values matching our perfected engine)
+    // Advanced Physics Tuning State
     var animationSpeedMultiplier by remember { mutableFloatStateOf(1f) }
     var containerBulgeMultiplier by remember { mutableFloatStateOf(0.395f) }
     var contentBulgeMultiplier by remember { mutableFloatStateOf(0.15f) }
@@ -297,62 +351,49 @@ fun ExpandableGlassMenuContent() {
                         BasicText("Haptic Feedback", style = TextStyle(contentColor, 14.sp))
                         LiquidToggle(selected = { isHapticsEnabled }, onSelect = { isHapticsEnabled = it }, backdrop = controlsBackdrop)
                     }
-
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        BasicText("Glass Effect", style = TextStyle(contentColor, 14.sp))
-                        LiquidToggle(selected = { isGlassEnabled }, onSelect = { isGlassEnabled = it }, backdrop = controlsBackdrop)
-                    }
                 }
 
                 // ADVANCED PHYSICS TUNING SECTION
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     BasicText("Advanced Physics Tuning", style = TextStyle(contentColor, 18.sp, FontWeight.SemiBold))
 
-                    AdvancedTuningControl("Animation Speed", "Multiplies the entire spring natural frequency & tween duration.", animationSpeedMultiplier, { animationSpeedMultiplier = it }, 0.1f..4f, "${String.format("%.2f", animationSpeedMultiplier)}x", controlsBackdrop, contentColor, secondaryColor)
-                    AdvancedTuningControl("Container Bulge Ratio", "Friction dampener for physical bounds expansion during spring overshoot.", containerBulgeMultiplier, { containerBulgeMultiplier = it }, 0f..1f, String.format("%.3f", containerBulgeMultiplier), controlsBackdrop, contentColor, secondaryColor)
-                    AdvancedTuningControl("Inner Content Bulge Ratio", "Friction dampener applied to inner text scaling during overshoot to prevent extreme ballooning.", contentBulgeMultiplier, { contentBulgeMultiplier = it }, 0f..1f, String.format("%.3f", contentBulgeMultiplier), controlsBackdrop, contentColor, secondaryColor)
-                    AdvancedTuningControl("Content Pop X Amplitude", "Horizontal absolute scale addition during the animation sine wave.", contentPopX, { contentPopX = it }, 0f..0.2f, String.format("%.3f", contentPopX), controlsBackdrop, contentColor, secondaryColor)
-                    AdvancedTuningControl("Content Pop Y Amplitude", "Vertical absolute scale addition during the animation sine wave.", contentPopY, { contentPopY = it }, 0f..0.2f, String.format("%.3f", contentPopY), controlsBackdrop, contentColor, secondaryColor)
-                    AdvancedTuningControl("Drag Jelly Tension", "The hyperbolic tangent derivative controlling fluid squish resistance during finger dragging.", dragJellyTension, { dragJellyTension = it }, 0.01f..0.2f, String.format("%.3f", dragJellyTension), controlsBackdrop, contentColor, secondaryColor)
-                    AdvancedTuningControl("Motion Blur Peak", "Maximum directional blur generated at highest velocity points of the animation.", motionBlurAmount, { motionBlurAmount = it }, 0f..80f, "${motionBlurAmount.toInt()} dp", controlsBackdrop, contentColor, secondaryColor)
-                    AdvancedTuningControl("Arc Y-Axis Limit", "The physical ceiling of the triangular wave driving the vertical translation arc.", arcYOffsetDp, { arcYOffsetDp = it }, 0f..250f, "${arcYOffsetDp.toInt()} dp", controlsBackdrop, contentColor, secondaryColor)
+                    TuningControl("Animation Speed", "Multiplies the entire spring natural frequency & tween duration.", animationSpeedMultiplier, 1f, { animationSpeedMultiplier = it }, 0.1f..4f, { "${String.format("%.2f", it)}x" }, controlsBackdrop, contentColor, secondaryColor)
+                    TuningControl("Container Bulge Ratio", "Friction dampener for physical bounds expansion during spring overshoot.", containerBulgeMultiplier, 0.395f, { containerBulgeMultiplier = it }, 0f..1f, { String.format("%.3f", it) }, controlsBackdrop, contentColor, secondaryColor)
+                    TuningControl("Inner Content Bulge Ratio", "Friction dampener applied to inner text scaling during overshoot to prevent extreme ballooning.", contentBulgeMultiplier, 0.15f, { contentBulgeMultiplier = it }, 0f..1f, { String.format("%.3f", it) }, controlsBackdrop, contentColor, secondaryColor)
+                    TuningControl("Content Pop X Amplitude", "Horizontal absolute scale addition during the animation sine wave.", contentPopX, 0.03f, { contentPopX = it }, 0f..0.2f, { String.format("%.3f", it) }, controlsBackdrop, contentColor, secondaryColor)
+                    TuningControl("Content Pop Y Amplitude", "Vertical absolute scale addition during the animation sine wave.", contentPopY, 0.01f, { contentPopY = it }, 0f..0.2f, { String.format("%.3f", it) }, controlsBackdrop, contentColor, secondaryColor)
+                    TuningControl("Drag Jelly Tension", "The hyperbolic tangent derivative controlling fluid squish resistance during finger dragging.", dragJellyTension, 0.05f, { dragJellyTension = it }, 0.01f..0.2f, { String.format("%.3f", it) }, controlsBackdrop, contentColor, secondaryColor)
+                    TuningControl("Motion Blur Peak", "Maximum directional blur generated at highest velocity points of the animation.", motionBlurAmount, 25f, { motionBlurAmount = it }, 0f..80f, { "${it.toInt()} dp" }, controlsBackdrop, contentColor, secondaryColor)
+                    TuningControl("Arc Y-Axis Limit", "The physical ceiling of the triangular wave driving the vertical translation arc.", arcYOffsetDp, 75f, { arcYOffsetDp = it }, 0f..250f, { "${it.toInt()} dp" }, controlsBackdrop, contentColor, secondaryColor)
                 }
 
-                // GLASS EFFECT TUNING SECTION
-                if (isGlassEnabled) {
-                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                        BasicText("Glass Rendering", style = TextStyle(contentColor, 18.sp, FontWeight.SemiBold))
+                // GLASS EFFECT & LAYOUT SECTION
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    BasicText("Glass Rendering & Layout", style = TextStyle(contentColor, 18.sp, FontWeight.SemiBold))
 
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { BasicText("Corner Radius", style = TextStyle(contentColor, 14.sp)); BasicText("${cornerRadiusDp.toInt()} dp", style = TextStyle(secondaryColor, 14.sp)) }
-                            LiquidSlider(value = { cornerRadiusDp }, onValueChange = { cornerRadiusDp = it }, valueRange = 0f..64f, visibilityThreshold = 0.1f, backdrop = controlsBackdrop)
-                        }
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { BasicText("Blur Radius", style = TextStyle(contentColor, 14.sp)); BasicText("${blurRadiusDp.toInt()} dp", style = TextStyle(secondaryColor, 14.sp)) }
-                            LiquidSlider(value = { blurRadiusDp }, onValueChange = { blurRadiusDp = it }, valueRange = 0f..32f, visibilityThreshold = 0.1f, backdrop = controlsBackdrop)
-                        }
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { BasicText("Refraction Height", style = TextStyle(contentColor, 14.sp)); BasicText("${refractionHeightDp.toInt()} dp", style = TextStyle(secondaryColor, 14.sp)) }
-                            LiquidSlider(value = { refractionHeightDp }, onValueChange = { refractionHeightDp = it }, valueRange = 0f..48f, visibilityThreshold = 0.1f, backdrop = controlsBackdrop)
-                        }
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { BasicText("Refraction Amount", style = TextStyle(contentColor, 14.sp)); BasicText("${refractionAmountDp.toInt()} dp", style = TextStyle(secondaryColor, 14.sp)) }
-                            LiquidSlider(value = { refractionAmountDp }, onValueChange = { refractionAmountDp = it }, valueRange = 0f..64f, visibilityThreshold = 0.1f, backdrop = controlsBackdrop)
-                        }
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        BasicText("Glass Effect", style = TextStyle(contentColor, 14.sp))
+                        LiquidToggle(selected = { isGlassEnabled }, onSelect = { isGlassEnabled = it }, backdrop = controlsBackdrop)
+                    }
+
+                    if (isGlassEnabled) {
+                        TuningControl("Corner Radius", null, cornerRadiusDp, 30f, { cornerRadiusDp = it }, 0f..64f, { "${it.toInt()} dp" }, controlsBackdrop, contentColor, secondaryColor)
+                        TuningControl("Blur Radius", null, blurRadiusDp, 10f, { blurRadiusDp = it }, 0f..32f, { "${it.toInt()} dp" }, controlsBackdrop, contentColor, secondaryColor)
+                        TuningControl("Refraction Height", null, refractionHeightDp, 16f, { refractionHeightDp = it }, 0f..48f, { "${it.toInt()} dp" }, controlsBackdrop, contentColor, secondaryColor)
+                        TuningControl("Refraction Amount", null, refractionAmountDp, 20f, { refractionAmountDp = it }, 0f..64f, { "${it.toInt()} dp" }, controlsBackdrop, contentColor, secondaryColor)
+                        
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                             BasicText("Chromatic Aberration", style = TextStyle(contentColor, 14.sp))
                             LiquidToggle(selected = { chromaticAberration }, onSelect = { chromaticAberration = it }, backdrop = controlsBackdrop)
                         }
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { BasicText("Horizontal Offset", style = TextStyle(contentColor, 14.sp)); BasicText("${horizontalOffsetDp.toInt()} dp", style = TextStyle(secondaryColor, 14.sp)) }
-                            LiquidSlider(value = { horizontalOffsetDp }, onValueChange = { horizontalOffsetDp = it }, valueRange = -150f..150f, visibilityThreshold = 1f, backdrop = controlsBackdrop)
-                        }
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { BasicText("Vertical Offset", style = TextStyle(contentColor, 14.sp)); BasicText("${verticalOffsetDp.toInt()} dp", style = TextStyle(secondaryColor, 14.sp)) }
-                            LiquidSlider(value = { verticalOffsetDp }, onValueChange = { verticalOffsetDp = it }, valueRange = -150f..150f, visibilityThreshold = 1f, backdrop = controlsBackdrop)
-                        }
                     }
+
+                    TuningControl("Horizontal Offset", null, horizontalOffsetDp, 0f, { horizontalOffsetDp = it }, -150f..150f, { "${it.toInt()} dp" }, controlsBackdrop, contentColor, secondaryColor)
+                    TuningControl("Vertical Offset", null, verticalOffsetDp, 0f, { verticalOffsetDp = it }, -150f..150f, { "${it.toInt()} dp" }, controlsBackdrop, contentColor, secondaryColor)
                 }
+
+                // Dedicated spacer to prevent FAB overlay obstruction
+                Spacer(modifier = Modifier.height(80.dp))
             }
         }
     }
