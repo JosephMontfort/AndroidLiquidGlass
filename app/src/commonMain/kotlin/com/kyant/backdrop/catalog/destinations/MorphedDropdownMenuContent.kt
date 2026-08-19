@@ -1,6 +1,9 @@
 package com.kyant.backdrop.catalog.destinations
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -28,6 +31,8 @@ import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -40,14 +45,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.paint
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.isUnspecified
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
@@ -61,16 +71,23 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.toSize
 import androidx.compose.ui.util.fastCoerceAtMost
 import androidx.compose.ui.util.lerp
+import androidx.compose.ui.window.Dialog
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.kyant.backdrop.catalog.BackdropDemoScaffold
+import com.kyant.backdrop.catalog.ReceiveIcon
+import com.kyant.backdrop.catalog.SendIcon
+import com.kyant.backdrop.catalog.ShareFilledIcon
+import com.kyant.backdrop.catalog.SwapIcon
 import com.kyant.backdrop.catalog.components.LiquidButton
+import com.kyant.backdrop.catalog.components.LiquidSlider
 import com.kyant.backdrop.catalog.components.LiquidToggle
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
@@ -90,25 +107,132 @@ import kotlin.math.min
 import kotlin.math.sin
 import kotlin.math.tanh
 
+enum class MenuAlignment(val label: String) {
+    TopLeading("T-Left"), TopTrailing("T-Right"), BottomLeading("B-Left"), BottomTrailing("B-Right");
+
+    val composeAlignment: Alignment
+        get() = when (this) {
+            TopLeading -> Alignment.TopStart
+            TopTrailing -> Alignment.TopEnd
+            BottomLeading -> Alignment.BottomStart
+            BottomTrailing -> Alignment.BottomEnd
+        }
+
+    val transformOrigin: TransformOrigin
+        get() = when (this) {
+            TopLeading -> TransformOrigin(0f, 0f)
+            TopTrailing -> TransformOrigin(1f, 0f)
+            BottomLeading -> TransformOrigin(0f, 1f)
+            BottomTrailing -> TransformOrigin(1f, 1f)
+        }
+
+    fun calculateOffsetY(blurProgress: Float, maxOffsetPx: Float): Float {
+        return when (this) {
+            TopLeading, TopTrailing -> maxOffsetPx * blurProgress
+            BottomLeading, BottomTrailing -> -maxOffsetPx * blurProgress
+        }
+    }
+}
+
+enum class MenuAnimationPreset(val label: String) {
+    Bouncy("Bouncy"), Smooth("Smooth"), Snappy("Snappy");
+
+    fun getSpec(isClosing: Boolean = false, speedMultiplier: Float = 1f): AnimationSpec<Float> = when (this) {
+        // Ultra-soft settling via lower stiffness and precise threshold
+        Bouncy -> if (isClosing) spring(dampingRatio = 0.8f, stiffness = 200f * (speedMultiplier * speedMultiplier), visibilityThreshold = 0.001f) 
+                  else spring(dampingRatio = 0.55f, stiffness = 120f * (speedMultiplier * speedMultiplier), visibilityThreshold = 0.001f)
+        Smooth -> tween(durationMillis = (650f / speedMultiplier).toInt(), easing = FastOutSlowInEasing)
+        Snappy -> spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow * (speedMultiplier * speedMultiplier))
+    }
+}
+
+// Universal Tuning Component for exposing Physics & Values to the UI
 @Composable
-fun DropdownMenuContent() {
+fun TuningControl(
+    name: String,
+    description: String? = null,
+    value: Float,
+    defaultValue: Float,
+    onValueChange: (Float) -> Unit,
+    valueRange: ClosedFloatingPointRange<Float>,
+    formatValue: (Float) -> String,
+    backdrop: Backdrop,
+    contentColor: Color,
+    secondaryColor: Color
+) {
+    var showCustomInputDialog by remember { mutableStateOf(false) }
+    var customInputValue by remember { mutableStateOf("") }
+    
+    val isLightTheme = !isSystemInDarkTheme()
+    val dialogBg = if (isLightTheme) Color(0xFFF0F0F0) else Color(0xFF222222)
+    val fieldBg = if (isLightTheme) Color.White else Color.Black.copy(alpha = 0.3f)
+
+    if (showCustomInputDialog) {
+        Dialog(onDismissRequest = { showCustomInputDialog = false }) {
+            Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(dialogBg).padding(20.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    BasicText("Set value for $name", style = TextStyle(contentColor, 16.sp, FontWeight.SemiBold))
+                    BasicTextField(
+                        value = customInputValue,
+                        onValueChange = { customInputValue = it },
+                        textStyle = TextStyle(contentColor, 16.sp),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        cursorBrush = SolidColor(contentColor),
+                        modifier = Modifier.fillMaxWidth().background(fieldBg, RoundedCornerShape(8.dp)).padding(12.dp)
+                    )
+                    Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
+                        BasicText("Cancel", modifier = Modifier.clickable { showCustomInputDialog = false }.padding(8.dp), style = TextStyle(secondaryColor, 14.sp))
+                        Spacer(Modifier.width(16.dp))
+                        BasicText("Apply", modifier = Modifier.clickable {
+                            customInputValue.toFloatOrNull()?.let { onValueChange(it) }
+                            showCustomInputDialog = false
+                        }.padding(8.dp), style = TextStyle(Color(0xFF0088FF), 14.sp, FontWeight.Bold))
+                    }
+                }
+            }
+        }
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            BasicText(name, style = TextStyle(contentColor, 14.sp, FontWeight.SemiBold))
+            
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (abs(value - defaultValue) > 0.001f) {
+                    BasicText("Reset", modifier = Modifier.clickable { onValueChange(defaultValue) }, style = TextStyle(Color(0xFF0088FF), 12.sp, FontWeight.Medium))
+                }
+                Box(modifier = Modifier.pointerInput(Unit) {
+                    detectTapGestures(onLongPress = {
+                        customInputValue = value.toString()
+                        showCustomInputDialog = true
+                    })
+                }) {
+                    BasicText(formatValue(value), style = TextStyle(secondaryColor, 13.sp, FontWeight.Medium))
+                }
+            }
+        }
+        if (description != null) {
+            BasicText(description, style = TextStyle(secondaryColor, 12.sp, lineHeight = 16.sp), modifier = Modifier.padding(bottom = 2.dp))
+        }
+        LiquidSlider(value = { value }, onValueChange = onValueChange, valueRange = valueRange, visibilityThreshold = 0.001f, backdrop = backdrop)
+    }
+}
+
+@Composable
+fun MorphedDropdownMenuContent() {
     val isLightTheme = !isSystemInDarkTheme()
     val contentColor = if (isLightTheme) Color.Black else Color.White
     val secondaryColor = if (isLightTheme) Color.Gray else Color(0xFFAAAAAA)
     val cardBackground = if (isLightTheme) Color.White.copy(alpha = 0.5f) else Color(0xFF1E1E1E).copy(alpha = 0.5f)
 
     // Base Properties
-    var selectedAlignment by remember { mutableStateOf(MenuAlignment.TopTrailing) }
+    var selectedAlignment by remember { mutableStateOf(MenuAlignment.TopLeading) }
     var selectedPreset by remember { mutableStateOf(MenuAnimationPreset.Bouncy) }
     var isGlassEnabled by remember { mutableStateOf(true) }
     var isHapticsEnabled by remember { mutableStateOf(true) }
     
-    // Dynamic Options Data
-    var itemCount by remember { mutableFloatStateOf(4f) }
-    var selectedIndex by remember { mutableStateOf(0) }
-    
     // Glass Design State
-    var cornerRadiusDp by remember { mutableFloatStateOf(24f) }
+    var cornerRadiusDp by remember { mutableFloatStateOf(30f) }
     var blurRadiusDp by remember { mutableFloatStateOf(10f) }
     var refractionHeightDp by remember { mutableFloatStateOf(16f) }
     var refractionAmountDp by remember { mutableFloatStateOf(20f) }
@@ -135,10 +259,9 @@ fun DropdownMenuContent() {
         Column(
             modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 16.dp)
         ) {
-            BasicText("Standard Dropdown", Modifier.padding(top = 16.dp, bottom = 4.dp), style = TextStyle(contentColor, 26.sp, FontWeight.SemiBold))
+            BasicText("Expandable Glass Menu", Modifier.padding(top = 16.dp, bottom = 4.dp), style = TextStyle(contentColor, 26.sp, FontWeight.SemiBold))
             BasicText("Preview", style = TextStyle(Color(0xFF0088FF), 15.sp, FontWeight.Medium))
 
-            // PREVIEW BOX (Horizontal Layout)
             Box(
                 modifier = Modifier.fillMaxWidth().height(340.dp).clip(RoundedCornerShape(20.dp)).background(Color.Black.copy(alpha = 0.08f))
                     .pointerInput(selectedPreset, animationSpeedMultiplier) {
@@ -149,58 +272,38 @@ fun DropdownMenuContent() {
                         }
                     }
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(24.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Top
-                ) {
-                    BasicText("Playback Quality", style = TextStyle(contentColor, 18.sp, FontWeight.SemiBold), modifier = Modifier.padding(top = 10.dp))
-                    
-                    StandardGlassDropdownMenu(
-                        animatableProgress = animatableProgress,
-                        animationPreset = selectedPreset,
-                        animationSpeedMultiplier = animationSpeedMultiplier,
-                        containerBulgeMultiplier = containerBulgeMultiplier,
-                        contentBulgeMultiplier = contentBulgeMultiplier,
-                        contentPopX = contentPopX,
-                        contentPopY = contentPopY,
-                        dragJellyTension = dragJellyTension,
-                        motionBlurAmount = motionBlurAmount,
-                        arcYOffsetDp = arcYOffsetDp,
-                        alignment = selectedAlignment,
-                        backdrop = backdrop,
-                        isGlassEnabled = isGlassEnabled,
-                        isHapticsEnabled = isHapticsEnabled,
-                        cornerRadius = cornerRadiusDp.dp,
-                        blurRadius = blurRadiusDp,
-                        refractionHeight = refractionHeightDp,
-                        refractionAmount = refractionAmountDp,
-                        chromaticAberration = chromaticAberration,
-                        horizontalOffset = horizontalOffsetDp,
-                        verticalOffset = verticalOffsetDp,
-                        label = {
-                            Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                                BasicText("Option ${selectedIndex + 1}", style = TextStyle(contentColor, 15.sp, FontWeight.Medium))
-                                Spacer(Modifier.width(12.dp))
-                                BasicText("▼", style = TextStyle(contentColor.copy(0.6f), 10.sp))
-                            }
-                        }
-                    ) { globalTouch, closeMenu, hoveredIndex, setHovered ->
-                        repeat(itemCount.toInt()) { index ->
-                            DropdownItemRow(
-                                title = "Option ${index + 1}",
-                                contentColor = contentColor,
-                                isSelected = selectedIndex == index,
-                                isHovered = hoveredIndex == index,
-                                onHoverChange = { if (it) setHovered(index) else if (hoveredIndex == index) setHovered(null) },
-                                globalTouchPosition = globalTouch,
-                                onClick = {
-                                    selectedIndex = index
-                                    closeMenu()
-                                }
-                            )
+                ExpandableGlassMenu(
+                    animatableProgress = animatableProgress,
+                    animationPreset = selectedPreset,
+                    animationSpeedMultiplier = animationSpeedMultiplier,
+                    containerBulgeMultiplier = containerBulgeMultiplier,
+                    contentBulgeMultiplier = contentBulgeMultiplier,
+                    contentPopX = contentPopX,
+                    contentPopY = contentPopY,
+                    dragJellyTension = dragJellyTension,
+                    motionBlurAmount = motionBlurAmount,
+                    arcYOffsetDp = arcYOffsetDp,
+                    alignment = selectedAlignment,
+                    backdrop = backdrop,
+                    isGlassEnabled = isGlassEnabled,
+                    isHapticsEnabled = isHapticsEnabled,
+                    cornerRadius = cornerRadiusDp.dp,
+                    blurRadius = blurRadiusDp,
+                    refractionHeight = refractionHeightDp,
+                    refractionAmount = refractionAmountDp,
+                    chromaticAberration = chromaticAberration,
+                    horizontalOffset = horizontalOffsetDp,
+                    verticalOffset = verticalOffsetDp,
+                    modifier = Modifier.padding(16.dp),
+                    label = {
+                        Box(modifier = Modifier.size(55.dp), contentAlignment = Alignment.Center) {
+                            Box(modifier = Modifier.size(24.dp).paint(rememberVectorPainter(ShareFilledIcon), colorFilter = ColorFilter.tint(contentColor)))
                         }
                     }
+                ) { globalTouch, closeMenu, hoveredIndex, setHovered ->
+                    MenuRow(SendIcon, "Send", "This is a sample text description", contentColor, secondaryColor, hoveredIndex == 0, { if (it) setHovered(0) else if (hoveredIndex == 0) setHovered(null) }, globalTouchPosition = globalTouch, onClick = closeMenu)
+                    MenuRow(SwapIcon, "Swap", "This is a sample text description", contentColor, secondaryColor, hoveredIndex == 1, { if (it) setHovered(1) else if (hoveredIndex == 1) setHovered(null) }, globalTouchPosition = globalTouch, onClick = closeMenu)
+                    MenuRow(ReceiveIcon, "Receive", "This is a sample text description", contentColor, secondaryColor, hoveredIndex == 2, { if (it) setHovered(2) else if (hoveredIndex == 2) setHovered(null) }, globalTouchPosition = globalTouch, onClick = closeMenu)
                 }
             }
 
@@ -213,7 +316,24 @@ fun DropdownMenuContent() {
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     BasicText("Core Properties", style = TextStyle(contentColor, 18.sp, FontWeight.SemiBold))
 
-                    TuningControl("Menu Items", "Number of options to display in opened menu.", itemCount, 4f, { itemCount = it }, 1f..10f, { "${it.toInt()}" }, controlsBackdrop, contentColor, secondaryColor)
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            BasicText("Progress", style = TextStyle(contentColor, 14.sp)); BasicText("${(animatableProgress.value * 100).toInt()}%", style = TextStyle(secondaryColor, 14.sp))
+                        }
+                        LiquidSlider(value = { animatableProgress.value }, onValueChange = { animationScope.launch { animatableProgress.snapTo(it) } }, valueRange = 0f..1f, visibilityThreshold = 0.001f, backdrop = controlsBackdrop)
+                    }
+
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        BasicText("Alignment", style = TextStyle(contentColor, 14.sp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            MenuAlignment.entries.forEach { align ->
+                                val isSelected = selectedAlignment == align
+                                LiquidButton(onClick = { selectedAlignment = align }, backdrop = controlsBackdrop, modifier = Modifier.weight(1f).height(40.dp), tint = if (isSelected) Color(0xFF0088FF) else Color.Unspecified, surfaceColor = if (isSelected) Color.Unspecified else Color.White.copy(0.15f)) {
+                                    BasicText(align.label, style = TextStyle(if (isSelected) Color.White else contentColor, 12.sp, FontWeight.Medium))
+                                }
+                            }
+                        }
+                    }
 
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         BasicText("Animation Trigger", style = TextStyle(contentColor, 14.sp))
@@ -233,14 +353,6 @@ fun DropdownMenuContent() {
                     }
                 }
 
-                // LAYOUT OFFSETS SECTION
-                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    BasicText("Layout Translation", style = TextStyle(contentColor, 18.sp, FontWeight.SemiBold))
-
-                    TuningControl("Horizontal Offset", "Static layout shift.", horizontalOffsetDp, 0f, { horizontalOffsetDp = it }, -150f..150f, { "${it.toInt()} dp" }, controlsBackdrop, contentColor, secondaryColor)
-                    TuningControl("Vertical Offset", "Static layout shift.", verticalOffsetDp, 0f, { verticalOffsetDp = it }, -150f..150f, { "${it.toInt()} dp" }, controlsBackdrop, contentColor, secondaryColor)
-                }
-
                 // ADVANCED PHYSICS TUNING SECTION
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     BasicText("Advanced Physics Tuning", style = TextStyle(contentColor, 18.sp, FontWeight.SemiBold))
@@ -255,9 +367,9 @@ fun DropdownMenuContent() {
                     TuningControl("Arc Y-Axis Limit", "The physical ceiling of the triangular wave driving the vertical translation arc.", arcYOffsetDp, 75f, { arcYOffsetDp = it }, 0f..250f, { "${it.toInt()} dp" }, controlsBackdrop, contentColor, secondaryColor)
                 }
 
-                // GLASS RENDERING SECTION
+                // GLASS EFFECT & LAYOUT SECTION
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    BasicText("Glass Rendering", style = TextStyle(contentColor, 18.sp, FontWeight.SemiBold))
+                    BasicText("Glass Rendering & Layout", style = TextStyle(contentColor, 18.sp, FontWeight.SemiBold))
 
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         BasicText("Glass Effect", style = TextStyle(contentColor, 14.sp))
@@ -265,7 +377,7 @@ fun DropdownMenuContent() {
                     }
 
                     if (isGlassEnabled) {
-                        TuningControl("Corner Radius", null, cornerRadiusDp, 24f, { cornerRadiusDp = it }, 0f..64f, { "${it.toInt()} dp" }, controlsBackdrop, contentColor, secondaryColor)
+                        TuningControl("Corner Radius", null, cornerRadiusDp, 30f, { cornerRadiusDp = it }, 0f..64f, { "${it.toInt()} dp" }, controlsBackdrop, contentColor, secondaryColor)
                         TuningControl("Blur Radius", null, blurRadiusDp, 10f, { blurRadiusDp = it }, 0f..32f, { "${it.toInt()} dp" }, controlsBackdrop, contentColor, secondaryColor)
                         TuningControl("Refraction Height", null, refractionHeightDp, 16f, { refractionHeightDp = it }, 0f..48f, { "${it.toInt()} dp" }, controlsBackdrop, contentColor, secondaryColor)
                         TuningControl("Refraction Amount", null, refractionAmountDp, 20f, { refractionAmountDp = it }, 0f..64f, { "${it.toInt()} dp" }, controlsBackdrop, contentColor, secondaryColor)
@@ -275,8 +387,12 @@ fun DropdownMenuContent() {
                             LiquidToggle(selected = { chromaticAberration }, onSelect = { chromaticAberration = it }, backdrop = controlsBackdrop)
                         }
                     }
+
+                    TuningControl("Horizontal Offset", null, horizontalOffsetDp, 0f, { horizontalOffsetDp = it }, -150f..150f, { "${it.toInt()} dp" }, controlsBackdrop, contentColor, secondaryColor)
+                    TuningControl("Vertical Offset", null, verticalOffsetDp, 0f, { verticalOffsetDp = it }, -150f..150f, { "${it.toInt()} dp" }, controlsBackdrop, contentColor, secondaryColor)
                 }
 
+                // Dedicated spacer to prevent FAB overlay obstruction
                 Spacer(modifier = Modifier.height(80.dp))
             }
         }
@@ -284,7 +400,7 @@ fun DropdownMenuContent() {
 }
 
 @Composable
-private fun StandardGlassDropdownMenu(
+fun ExpandableGlassMenu(
     animatableProgress: Animatable<Float, *>,
     animationPreset: MenuAnimationPreset,
     animationSpeedMultiplier: Float = 1f,
@@ -307,6 +423,7 @@ private fun StandardGlassDropdownMenu(
     horizontalOffset: Float,
     verticalOffset: Float,
     modifier: Modifier = Modifier,
+    labelSize: Size = Size(55f, 55f),
     label: @Composable () -> Unit,
     content: @Composable (globalTouchPosition: Offset, closeMenu: () -> Unit, hoveredIndex: Int?, setHovered: (Int?) -> Unit) -> Unit
 ) {
@@ -316,8 +433,6 @@ private fun StandardGlassDropdownMenu(
     val animationScope = rememberCoroutineScope()
     
     var contentMeasuredSize by remember { mutableStateOf(Size.Zero) }
-    var labelMeasuredSize by remember { mutableStateOf(Size.Zero) }
-    
     var dragOffset by remember { mutableStateOf(Offset.Zero) }
     var isPressed by remember { mutableStateOf(false) }
     var isDragging by remember { mutableStateOf(false) }
@@ -327,7 +442,7 @@ private fun StandardGlassDropdownMenu(
     var hoveredIndex by remember { mutableStateOf<Int?>(null) }
     val setHovered: (Int?) -> Unit = { hoveredIndex = it }
 
-    val labelSizePx = if (labelMeasuredSize != Size.Zero) labelMeasuredSize else with(density) { Size(100.dp.toPx(), 40.dp.toPx()) }
+    val labelSizePx = with(density) { Size(labelSize.width.dp.toPx(), labelSize.height.dp.toPx()) }
 
     LaunchedEffect(hoveredIndex) {
         if (isHapticsEnabled && isDragging && hoveredIndex != null) {
@@ -340,8 +455,8 @@ private fun StandardGlassDropdownMenu(
         animationScope.launch { animatableProgress.animateTo(0f, animationPreset.getSpec(isClosing = true, speedMultiplier = animationSpeedMultiplier)) }
     }
 
-    Box(modifier = modifier, contentAlignment = alignment.composeAlignment) {
-        StandardGlassEffectContainer(
+    Box(modifier = modifier.fillMaxSize(), contentAlignment = alignment.composeAlignment) {
+        GlassEffectContainer(
             animatableProgress = animatableProgress,
             dragOffset = dragOffset,
             isPressed = isPressed,
@@ -366,7 +481,7 @@ private fun StandardGlassDropdownMenu(
             contentSize = contentMeasuredSize,
             label = {
                 Box(
-                    modifier = Modifier.onSizeChanged { labelMeasuredSize = it.toSize() }.onGloballyPositioned { labelCoordinates = it }
+                    modifier = Modifier.size(with(density) { labelSizePx.width.toDp() }).onGloballyPositioned { labelCoordinates = it }
                         .pointerInput(animationPreset, animationSpeedMultiplier) {
                             awaitEachGesture {
                                 val down = awaitFirstDown(requireUnconsumed = false)
@@ -442,8 +557,8 @@ private fun StandardGlassDropdownMenu(
             },
             content = {
                 Column(
-                    modifier = Modifier.width(IntrinsicSize.Max).onSizeChanged { if (it.width > 0 && it.height > 0) contentMeasuredSize = it.toSize() }.padding(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier = Modifier.width(IntrinsicSize.Max).onSizeChanged { if (it.width > 0 && it.height > 0) contentMeasuredSize = it.toSize() }.padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     content(globalTouchPosition, closeMenu, hoveredIndex, setHovered)
                 }
@@ -453,7 +568,7 @@ private fun StandardGlassDropdownMenu(
 }
 
 @Composable
-private fun StandardGlassEffectContainer(
+fun GlassEffectContainer(
     animatableProgress: Animatable<Float, *>,
     dragOffset: Offset,
     isPressed: Boolean,
@@ -485,16 +600,19 @@ private fun StandardGlassEffectContainer(
     val animatedDragX by animateFloatAsState(dragOffset.x, spring(stiffness = 400f, dampingRatio = 0.6f))
     val animatedDragY by animateFloatAsState(dragOffset.y, spring(stiffness = 400f, dampingRatio = 0.6f))
     
+    // Press illumination progress
     val isPressing = isPressed && animatableProgress.targetValue == 0f
     val buttonPressProgress by animateFloatAsState(if (isPressing) 1f else 0f, spring(dampingRatio = 0.6f, stiffness = 400f))
 
     Box(
         modifier = Modifier
+            // ZERO-RECOMPOSITION LAYOUT (Executes measuring natively without calling recompose)
             .layout { measurable, constraints ->
                 val p = animatableProgress.value
                 val widthDiff = (contentSize.width - labelSize.width).coerceAtLeast(0f)
                 val heightDiff = (contentSize.height - labelSize.height).coerceAtLeast(0f)
 
+                // Vertical Pill Morph (Height pops instantly, width follows softly)
                 val widthProgress = if (p > 1f) 1f + (p - 1f) * containerBulgeMultiplier else (p * p)
                 val heightProgress = if (p > 1f) 1f + (p - 1f) * containerBulgeMultiplier else sin(p * (PI / 2f)).toFloat()
 
@@ -587,6 +705,7 @@ private fun StandardGlassEffectContainer(
                     val minAspectScale = if (contentSize.width > 0f && contentSize.height > 0f) { min(labelSize.width / contentSize.width, labelSize.height / contentSize.height) } else 1f
                     val baseScale = minAspectScale + (1f - minAspectScale) * rawContentProgress
                     
+                    // iOS Squish stretching from the absolute center
                     val pop = sin(progress.coerceIn(0f, 1f) * PI).toFloat()
                     
                     alpha = rawContentProgress.coerceIn(0f, 1f)
@@ -611,10 +730,12 @@ private fun StandardGlassEffectContainer(
 }
 
 @Composable
-private fun DropdownItemRow(
+fun MenuRow(
+    icon: ImageVector,
     title: String,
+    description: String,
     contentColor: Color,
-    isSelected: Boolean,
+    secondaryColor: Color,
     isHovered: Boolean,
     onHoverChange: (Boolean) -> Unit,
     globalTouchPosition: Offset,
@@ -632,13 +753,14 @@ private fun DropdownItemRow(
     val hoverAlpha by animateFloatAsState(if (isHovered) 0.1f else 0f, tween(150))
 
     Row(
-        modifier = Modifier.fillMaxWidth().onGloballyPositioned { rowCoords = it }.clip(RoundedCornerShape(12.dp)).clickable { onClick() }.background(contentColor.copy(alpha = hoverAlpha)).padding(horizontal = 16.dp, vertical = 12.dp),
+        modifier = Modifier.fillMaxWidth().onGloballyPositioned { rowCoords = it }.clip(RoundedCornerShape(14.dp)).clickable { onClick() }.background(contentColor.copy(alpha = hoverAlpha)).padding(horizontal = 10.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        BasicText(title, style = TextStyle(contentColor, 15.sp, FontWeight.Medium))
-        if (isSelected) {
-            BasicText("✓", style = TextStyle(Color(0xFF0088FF), 15.sp, FontWeight.Bold))
+        Box(modifier = Modifier.size(24.dp).paint(rememberVectorPainter(icon), colorFilter = ColorFilter.tint(contentColor)))
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            BasicText(title, style = TextStyle(contentColor, 15.sp, FontWeight.SemiBold))
+            BasicText(description, style = TextStyle(secondaryColor, 12.sp), maxLines = 1)
         }
     }
 }

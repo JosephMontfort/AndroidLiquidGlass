@@ -47,7 +47,8 @@ fun HomeContent(onNavigate: (CatalogDestination) -> Unit) {
             ListItem({ onNavigate(CatalogDestination.Slider) }, "Slider")
             ListItem({ onNavigate(CatalogDestination.BottomTabs) }, "Bottom tabs")
             ListItem({ onNavigate(CatalogDestination.Dialog) }, "Dialog")
-            ListItem({ onNavigate(CatalogDestination.DropdownMenu) }, "Dropdown menu")
+            ListItem({ onNavigate(CatalogDestination.MorphedDropdownMenu) }, "Morphed dropdown menu")
+            ListItem({ onNavigate(CatalogDestination.DropdownMenu) }, "Standard dropdown menu")
             ListItem({ onNavigate(CatalogDestination.FlippedMorphDropdown) }, "Flipped morph dropdown")
 
             Subtitle("System UIs")

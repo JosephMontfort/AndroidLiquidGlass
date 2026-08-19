@@ -7,6 +7,7 @@ enum class CatalogDestination {
     Slider,
     BottomTabs,
     Dialog,
+    MorphedDropdownMenu,
     DropdownMenu,
     FlippedMorphDropdown,
     LockScreen,

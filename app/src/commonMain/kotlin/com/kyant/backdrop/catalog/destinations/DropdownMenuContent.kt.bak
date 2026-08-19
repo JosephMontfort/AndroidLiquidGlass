@@ -1,6 +1,9 @@
 package com.kyant.backdrop.catalog.destinations
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -40,14 +43,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.paint
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.isUnspecified
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
@@ -70,7 +77,12 @@ import androidx.compose.ui.util.lerp
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.kyant.backdrop.catalog.BackdropDemoScaffold
+import com.kyant.backdrop.catalog.ReceiveIcon
+import com.kyant.backdrop.catalog.SendIcon
+import com.kyant.backdrop.catalog.ShareFilledIcon
+import com.kyant.backdrop.catalog.SwapIcon
 import com.kyant.backdrop.catalog.components.LiquidButton
+import com.kyant.backdrop.catalog.components.LiquidSlider
 import com.kyant.backdrop.catalog.components.LiquidToggle
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
@@ -90,41 +102,67 @@ import kotlin.math.min
 import kotlin.math.sin
 import kotlin.math.tanh
 
+enum class MenuAlignment(val label: String) {
+    TopLeading("T-Left"), TopTrailing("T-Right"), BottomLeading("B-Left"), BottomTrailing("B-Right");
+
+    val composeAlignment: Alignment
+        get() = when (this) {
+            TopLeading -> Alignment.TopStart
+            TopTrailing -> Alignment.TopEnd
+            BottomLeading -> Alignment.BottomStart
+            BottomTrailing -> Alignment.BottomEnd
+        }
+
+    val transformOrigin: TransformOrigin
+        get() = when (this) {
+            TopLeading -> TransformOrigin(0f, 0f)
+            TopTrailing -> TransformOrigin(1f, 0f)
+            BottomLeading -> TransformOrigin(0f, 1f)
+            BottomTrailing -> TransformOrigin(1f, 1f)
+        }
+
+    fun calculateOffsetY(blurProgress: Float, maxOffsetPx: Float): Float {
+        return when (this) {
+            TopLeading, TopTrailing -> maxOffsetPx * blurProgress
+            BottomLeading, BottomTrailing -> -maxOffsetPx * blurProgress
+        }
+    }
+}
+
+enum class MenuAnimationPreset(val label: String) {
+    Bouncy("Bouncy"), Smooth("Smooth"), Snappy("Snappy");
+
+    fun getSpec(isClosing: Boolean = false, speedMultiplier: Float = 1f): AnimationSpec<Float> = when (this) {
+        // Ultra-soft settling via lower stiffness and precise threshold
+        Bouncy -> if (isClosing) spring(dampingRatio = 0.8f, stiffness = 200f * (speedMultiplier * speedMultiplier), visibilityThreshold = 0.001f) 
+                  else spring(dampingRatio = 0.55f, stiffness = 120f * (speedMultiplier * speedMultiplier), visibilityThreshold = 0.001f)
+        Smooth -> tween(durationMillis = (650f / speedMultiplier).toInt(), easing = FastOutSlowInEasing)
+        Snappy -> spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow * (speedMultiplier * speedMultiplier))
+    }
+}
+
 @Composable
-fun DropdownMenuContent() {
+fun ExpandableGlassMenuContent() {
     val isLightTheme = !isSystemInDarkTheme()
     val contentColor = if (isLightTheme) Color.Black else Color.White
     val secondaryColor = if (isLightTheme) Color.Gray else Color(0xFFAAAAAA)
     val cardBackground = if (isLightTheme) Color.White.copy(alpha = 0.5f) else Color(0xFF1E1E1E).copy(alpha = 0.5f)
 
-    // Base Properties
-    var selectedAlignment by remember { mutableStateOf(MenuAlignment.TopTrailing) }
+    var selectedAlignment by remember { mutableStateOf(MenuAlignment.TopLeading) }
     var selectedPreset by remember { mutableStateOf(MenuAnimationPreset.Bouncy) }
+    var animationSpeedMultiplier by remember { mutableFloatStateOf(1f) }
+
     var isGlassEnabled by remember { mutableStateOf(true) }
-    var isHapticsEnabled by remember { mutableStateOf(true) }
-    
-    // Dynamic Options Data
-    var itemCount by remember { mutableFloatStateOf(4f) }
-    var selectedIndex by remember { mutableStateOf(0) }
-    
-    // Glass Design State
-    var cornerRadiusDp by remember { mutableFloatStateOf(24f) }
+    var cornerRadiusDp by remember { mutableFloatStateOf(30f) }
     var blurRadiusDp by remember { mutableFloatStateOf(10f) }
     var refractionHeightDp by remember { mutableFloatStateOf(16f) }
     var refractionAmountDp by remember { mutableFloatStateOf(20f) }
     var chromaticAberration by remember { mutableStateOf(false) }
+    
     var horizontalOffsetDp by remember { mutableFloatStateOf(0f) }
     var verticalOffsetDp by remember { mutableFloatStateOf(0f) }
-
-    // Advanced Physics Tuning State
-    var animationSpeedMultiplier by remember { mutableFloatStateOf(1f) }
-    var containerBulgeMultiplier by remember { mutableFloatStateOf(0.395f) }
-    var contentBulgeMultiplier by remember { mutableFloatStateOf(0.15f) }
-    var contentPopX by remember { mutableFloatStateOf(0.03f) }
-    var contentPopY by remember { mutableFloatStateOf(0.01f) }
-    var dragJellyTension by remember { mutableFloatStateOf(0.05f) }
-    var motionBlurAmount by remember { mutableFloatStateOf(25f) }
-    var arcYOffsetDp by remember { mutableFloatStateOf(75f) }
+    
+    var isHapticsEnabled by remember { mutableStateOf(true) }
 
     val animationScope = rememberCoroutineScope()
     val animatableProgress = remember { Animatable(0f) }
@@ -133,14 +171,13 @@ fun DropdownMenuContent() {
         val controlsBackdrop = rememberLayerBackdrop()
 
         Column(
-            modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 16.dp)
+            modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 16f.dp)
         ) {
-            BasicText("Standard Dropdown", Modifier.padding(top = 16.dp, bottom = 4.dp), style = TextStyle(contentColor, 26.sp, FontWeight.SemiBold))
-            BasicText("Preview", style = TextStyle(Color(0xFF0088FF), 15.sp, FontWeight.Medium))
+            BasicText("Expandable Glass Menu", Modifier.padding(top = 16f.dp, bottom = 4f.dp), style = TextStyle(contentColor, 26f.sp, FontWeight.SemiBold))
+            BasicText("Preview", style = TextStyle(Color(0xFF0088FF), 15f.sp, FontWeight.Medium))
 
-            // PREVIEW BOX (Horizontal Layout)
             Box(
-                modifier = Modifier.fillMaxWidth().height(340.dp).clip(RoundedCornerShape(20.dp)).background(Color.Black.copy(alpha = 0.08f))
+                modifier = Modifier.fillMaxWidth().height(340f.dp).clip(RoundedCornerShape(20f.dp)).background(Color.Black.copy(alpha = 0.08f))
                     .pointerInput(selectedPreset, animationSpeedMultiplier) {
                         detectTapGestures {
                             if (animatableProgress.value > 0.1f) {
@@ -149,152 +186,127 @@ fun DropdownMenuContent() {
                         }
                     }
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(24.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Top
-                ) {
-                    BasicText("Playback Quality", style = TextStyle(contentColor, 18.sp, FontWeight.SemiBold), modifier = Modifier.padding(top = 10.dp))
-                    
-                    StandardGlassDropdownMenu(
-                        animatableProgress = animatableProgress,
-                        animationPreset = selectedPreset,
-                        animationSpeedMultiplier = animationSpeedMultiplier,
-                        containerBulgeMultiplier = containerBulgeMultiplier,
-                        contentBulgeMultiplier = contentBulgeMultiplier,
-                        contentPopX = contentPopX,
-                        contentPopY = contentPopY,
-                        dragJellyTension = dragJellyTension,
-                        motionBlurAmount = motionBlurAmount,
-                        arcYOffsetDp = arcYOffsetDp,
-                        alignment = selectedAlignment,
-                        backdrop = backdrop,
-                        isGlassEnabled = isGlassEnabled,
-                        isHapticsEnabled = isHapticsEnabled,
-                        cornerRadius = cornerRadiusDp.dp,
-                        blurRadius = blurRadiusDp,
-                        refractionHeight = refractionHeightDp,
-                        refractionAmount = refractionAmountDp,
-                        chromaticAberration = chromaticAberration,
-                        horizontalOffset = horizontalOffsetDp,
-                        verticalOffset = verticalOffsetDp,
-                        label = {
-                            Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                                BasicText("Option ${selectedIndex + 1}", style = TextStyle(contentColor, 15.sp, FontWeight.Medium))
-                                Spacer(Modifier.width(12.dp))
-                                BasicText("▼", style = TextStyle(contentColor.copy(0.6f), 10.sp))
-                            }
-                        }
-                    ) { globalTouch, closeMenu, hoveredIndex, setHovered ->
-                        repeat(itemCount.toInt()) { index ->
-                            DropdownItemRow(
-                                title = "Option ${index + 1}",
-                                contentColor = contentColor,
-                                isSelected = selectedIndex == index,
-                                isHovered = hoveredIndex == index,
-                                onHoverChange = { if (it) setHovered(index) else if (hoveredIndex == index) setHovered(null) },
-                                globalTouchPosition = globalTouch,
-                                onClick = {
-                                    selectedIndex = index
-                                    closeMenu()
-                                }
-                            )
+                ExpandableGlassMenu(
+                    animatableProgress = animatableProgress,
+                    animationPreset = selectedPreset,
+                    animationSpeedMultiplier = animationSpeedMultiplier,
+                    alignment = selectedAlignment,
+                    backdrop = backdrop,
+                    isGlassEnabled = isGlassEnabled,
+                    isHapticsEnabled = isHapticsEnabled,
+                    cornerRadius = cornerRadiusDp.dp,
+                    blurRadius = blurRadiusDp,
+                    refractionHeight = refractionHeightDp,
+                    refractionAmount = refractionAmountDp,
+                    chromaticAberration = chromaticAberration,
+                    horizontalOffset = horizontalOffsetDp,
+                    verticalOffset = verticalOffsetDp,
+                    modifier = Modifier.padding(16f.dp),
+                    label = {
+                        Box(modifier = Modifier.size(55f.dp), contentAlignment = Alignment.Center) {
+                            Box(modifier = Modifier.size(24f.dp).paint(rememberVectorPainter(ShareFilledIcon), colorFilter = ColorFilter.tint(contentColor)))
                         }
                     }
+                ) { globalTouch, closeMenu, hoveredIndex, setHovered ->
+                    MenuRow(SendIcon, "Send", "This is a sample text description", contentColor, secondaryColor, hoveredIndex == 0, { if (it) setHovered(0) else if (hoveredIndex == 0) setHovered(null) }, globalTouchPosition = globalTouch, onClick = closeMenu)
+                    MenuRow(SwapIcon, "Swap", "This is a sample text description", contentColor, secondaryColor, hoveredIndex == 1, { if (it) setHovered(1) else if (hoveredIndex == 1) setHovered(null) }, globalTouchPosition = globalTouch, onClick = closeMenu)
+                    MenuRow(ReceiveIcon, "Receive", "This is a sample text description", contentColor, secondaryColor, hoveredIndex == 2, { if (it) setHovered(2) else if (hoveredIndex == 2) setHovered(null) }, globalTouchPosition = globalTouch, onClick = closeMenu)
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(16f.dp))
             Column(
-                modifier = Modifier.fillMaxWidth().weight(1f).padding(bottom = 16.dp).clip(RoundedCornerShape(24.dp)).drawBackdrop(backdrop = backdrop, shape = { RoundedCornerShape(24.dp) }, effects = { vibrancy(); blur(8.dp.toPx()); lens(16.dp.toPx(), 32.dp.toPx()) }, highlight = { Highlight.Plain }, exportedBackdrop = controlsBackdrop, onDrawSurface = { drawRect(cardBackground) }).verticalScroll(rememberScrollState()).padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(24.dp)
+                modifier = Modifier.fillMaxWidth().weight(1f).padding(bottom = 16f.dp).clip(RoundedCornerShape(24f.dp)).drawBackdrop(backdrop = backdrop, shape = { RoundedCornerShape(24f.dp) }, effects = { vibrancy(); blur(8f.dp.toPx()); lens(16f.dp.toPx(), 32f.dp.toPx()) }, highlight = { Highlight.Plain }, exportedBackdrop = controlsBackdrop, onDrawSurface = { drawRect(cardBackground) }).verticalScroll(rememberScrollState()).padding(20f.dp),
+                verticalArrangement = Arrangement.spacedBy(16f.dp)
             ) {
-                // CORE PROPERTIES SECTION
-                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    BasicText("Core Properties", style = TextStyle(contentColor, 18.sp, FontWeight.SemiBold))
+                BasicText("Properties", style = TextStyle(contentColor, 18f.sp, FontWeight.SemiBold))
 
-                    TuningControl("Menu Items", "Number of options to display in opened menu.", itemCount, 4f, { itemCount = it }, 1f..10f, { "${it.toInt()}" }, controlsBackdrop, contentColor, secondaryColor)
+                Column(verticalArrangement = Arrangement.spacedBy(8f.dp)) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        BasicText("Progress", style = TextStyle(contentColor, 14f.sp)); BasicText("${(animatableProgress.value * 100).toInt()}%", style = TextStyle(secondaryColor, 14f.sp))
+                    }
+                    LiquidSlider(value = { animatableProgress.value }, onValueChange = { animationScope.launch { animatableProgress.snapTo(it) } }, valueRange = 0f..1f, visibilityThreshold = 0.001f, backdrop = controlsBackdrop)
+                }
 
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        BasicText("Animation Trigger", style = TextStyle(contentColor, 14.sp))
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            MenuAnimationPreset.entries.forEach { preset ->
-                                val isSelected = selectedPreset == preset
-                                LiquidButton(onClick = { selectedPreset = preset; val target = if (animatableProgress.value > 0.5f) 0f else 1f; animationScope.launch { animatableProgress.animateTo(target, preset.getSpec(isClosing = target == 0f, speedMultiplier = animationSpeedMultiplier)) } }, backdrop = controlsBackdrop, modifier = Modifier.weight(1f).height(42.dp), tint = if (isSelected) Color(0xFF0088FF) else Color.Unspecified, surfaceColor = if (isSelected) Color.Unspecified else Color.White.copy(0.15f)) {
-                                    BasicText(preset.label, style = TextStyle(if (isSelected) Color.White else contentColor, 13.sp, FontWeight.Medium))
-                                }
+                Column(verticalArrangement = Arrangement.spacedBy(8f.dp)) {
+                    BasicText("Alignment", style = TextStyle(contentColor, 14f.sp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8f.dp)) {
+                        MenuAlignment.entries.forEach { align ->
+                            val isSelected = selectedAlignment == align
+                            LiquidButton(onClick = { selectedAlignment = align }, backdrop = controlsBackdrop, modifier = Modifier.weight(1f).height(40f.dp), tint = if (isSelected) Color(0xFF0088FF) else Color.Unspecified, surfaceColor = if (isSelected) Color.Unspecified else Color.White.copy(0.15f)) {
+                                BasicText(align.label, style = TextStyle(if (isSelected) Color.White else contentColor, 12f.sp, FontWeight.Medium))
                             }
                         }
                     }
-
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        BasicText("Haptic Feedback", style = TextStyle(contentColor, 14.sp))
-                        LiquidToggle(selected = { isHapticsEnabled }, onSelect = { isHapticsEnabled = it }, backdrop = controlsBackdrop)
-                    }
                 }
 
-                // LAYOUT OFFSETS SECTION
-                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    BasicText("Layout Translation", style = TextStyle(contentColor, 18.sp, FontWeight.SemiBold))
-
-                    TuningControl("Horizontal Offset", "Static layout shift.", horizontalOffsetDp, 0f, { horizontalOffsetDp = it }, -150f..150f, { "${it.toInt()} dp" }, controlsBackdrop, contentColor, secondaryColor)
-                    TuningControl("Vertical Offset", "Static layout shift.", verticalOffsetDp, 0f, { verticalOffsetDp = it }, -150f..150f, { "${it.toInt()} dp" }, controlsBackdrop, contentColor, secondaryColor)
-                }
-
-                // ADVANCED PHYSICS TUNING SECTION
-                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    BasicText("Advanced Physics Tuning", style = TextStyle(contentColor, 18.sp, FontWeight.SemiBold))
-
-                    TuningControl("Animation Speed", "Multiplies the entire spring natural frequency & tween duration.", animationSpeedMultiplier, 1f, { animationSpeedMultiplier = it }, 0.1f..4f, { "${String.format("%.2f", it)}x" }, controlsBackdrop, contentColor, secondaryColor)
-                    TuningControl("Container Bulge Ratio", "Friction dampener for physical bounds expansion during spring overshoot.", containerBulgeMultiplier, 0.395f, { containerBulgeMultiplier = it }, 0f..1f, { String.format("%.3f", it) }, controlsBackdrop, contentColor, secondaryColor)
-                    TuningControl("Inner Content Bulge Ratio", "Friction dampener applied to inner text scaling during overshoot to prevent extreme ballooning.", contentBulgeMultiplier, 0.15f, { contentBulgeMultiplier = it }, 0f..1f, { String.format("%.3f", it) }, controlsBackdrop, contentColor, secondaryColor)
-                    TuningControl("Content Pop X Amplitude", "Horizontal absolute scale addition during the animation sine wave.", contentPopX, 0.03f, { contentPopX = it }, 0f..0.2f, { String.format("%.3f", it) }, controlsBackdrop, contentColor, secondaryColor)
-                    TuningControl("Content Pop Y Amplitude", "Vertical absolute scale addition during the animation sine wave.", contentPopY, 0.01f, { contentPopY = it }, 0f..0.2f, { String.format("%.3f", it) }, controlsBackdrop, contentColor, secondaryColor)
-                    TuningControl("Drag Jelly Tension", "The hyperbolic tangent derivative controlling fluid squish resistance during finger dragging.", dragJellyTension, 0.05f, { dragJellyTension = it }, 0.01f..0.2f, { String.format("%.3f", it) }, controlsBackdrop, contentColor, secondaryColor)
-                    TuningControl("Motion Blur Peak", "Maximum directional blur generated at highest velocity points of the animation.", motionBlurAmount, 25f, { motionBlurAmount = it }, 0f..80f, { "${it.toInt()} dp" }, controlsBackdrop, contentColor, secondaryColor)
-                    TuningControl("Arc Y-Axis Limit", "The physical ceiling of the triangular wave driving the vertical translation arc.", arcYOffsetDp, 75f, { arcYOffsetDp = it }, 0f..250f, { "${it.toInt()} dp" }, controlsBackdrop, contentColor, secondaryColor)
-                }
-
-                // GLASS RENDERING SECTION
-                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    BasicText("Glass Rendering", style = TextStyle(contentColor, 18.sp, FontWeight.SemiBold))
-
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        BasicText("Glass Effect", style = TextStyle(contentColor, 14.sp))
-                        LiquidToggle(selected = { isGlassEnabled }, onSelect = { isGlassEnabled = it }, backdrop = controlsBackdrop)
-                    }
-
-                    if (isGlassEnabled) {
-                        TuningControl("Corner Radius", null, cornerRadiusDp, 24f, { cornerRadiusDp = it }, 0f..64f, { "${it.toInt()} dp" }, controlsBackdrop, contentColor, secondaryColor)
-                        TuningControl("Blur Radius", null, blurRadiusDp, 10f, { blurRadiusDp = it }, 0f..32f, { "${it.toInt()} dp" }, controlsBackdrop, contentColor, secondaryColor)
-                        TuningControl("Refraction Height", null, refractionHeightDp, 16f, { refractionHeightDp = it }, 0f..48f, { "${it.toInt()} dp" }, controlsBackdrop, contentColor, secondaryColor)
-                        TuningControl("Refraction Amount", null, refractionAmountDp, 20f, { refractionAmountDp = it }, 0f..64f, { "${it.toInt()} dp" }, controlsBackdrop, contentColor, secondaryColor)
-                        
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            BasicText("Chromatic Aberration", style = TextStyle(contentColor, 14.sp))
-                            LiquidToggle(selected = { chromaticAberration }, onSelect = { chromaticAberration = it }, backdrop = controlsBackdrop)
+                Column(verticalArrangement = Arrangement.spacedBy(8f.dp)) {
+                    BasicText("Animation Trigger", style = TextStyle(contentColor, 14f.sp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8f.dp)) {
+                        MenuAnimationPreset.entries.forEach { preset ->
+                            val isSelected = selectedPreset == preset
+                            LiquidButton(onClick = { selectedPreset = preset; val target = if (animatableProgress.value > 0.5f) 0f else 1f; animationScope.launch { animatableProgress.animateTo(target, preset.getSpec(isClosing = target == 0f, speedMultiplier = animationSpeedMultiplier)) } }, backdrop = controlsBackdrop, modifier = Modifier.weight(1f).height(42f.dp), tint = if (isSelected) Color(0xFF0088FF) else Color.Unspecified, surfaceColor = if (isSelected) Color.Unspecified else Color.White.copy(0.15f)) {
+                                BasicText(preset.label, style = TextStyle(if (isSelected) Color.White else contentColor, 13f.sp, FontWeight.Medium))
+                            }
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(80.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(8f.dp)) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { BasicText("Animation Speed", style = TextStyle(contentColor, 14f.sp)); BasicText("${((animationSpeedMultiplier * 10f).toInt()) / 10f}x", style = TextStyle(secondaryColor, 14f.sp)) }
+                    LiquidSlider(value = { animationSpeedMultiplier }, onValueChange = { animationSpeedMultiplier = it }, valueRange = 0.2f..3f, visibilityThreshold = 0.1f, backdrop = controlsBackdrop)
+                }
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    BasicText("Haptic Feedback", style = TextStyle(contentColor, 14f.sp))
+                    LiquidToggle(selected = { isHapticsEnabled }, onSelect = { isHapticsEnabled = it }, backdrop = controlsBackdrop)
+                }
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    BasicText("Glass Effect", style = TextStyle(contentColor, 14f.sp))
+                    LiquidToggle(selected = { isGlassEnabled }, onSelect = { isGlassEnabled = it }, backdrop = controlsBackdrop)
+                }
+
+                if (isGlassEnabled) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8f.dp)) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { BasicText("Corner Radius", style = TextStyle(contentColor, 14f.sp)); BasicText("${cornerRadiusDp.toInt()} dp", style = TextStyle(secondaryColor, 14f.sp)) }
+                        LiquidSlider(value = { cornerRadiusDp }, onValueChange = { cornerRadiusDp = it }, valueRange = 0f..64f, visibilityThreshold = 0.1f, backdrop = controlsBackdrop)
+                    }
+                    Column(verticalArrangement = Arrangement.spacedBy(8f.dp)) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { BasicText("Blur Radius", style = TextStyle(contentColor, 14f.sp)); BasicText("${blurRadiusDp.toInt()} dp", style = TextStyle(secondaryColor, 14f.sp)) }
+                        LiquidSlider(value = { blurRadiusDp }, onValueChange = { blurRadiusDp = it }, valueRange = 0f..32f, visibilityThreshold = 0.1f, backdrop = controlsBackdrop)
+                    }
+                    Column(verticalArrangement = Arrangement.spacedBy(8f.dp)) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { BasicText("Refraction Height", style = TextStyle(contentColor, 14f.sp)); BasicText("${refractionHeightDp.toInt()} dp", style = TextStyle(secondaryColor, 14f.sp)) }
+                        LiquidSlider(value = { refractionHeightDp }, onValueChange = { refractionHeightDp = it }, valueRange = 0f..48f, visibilityThreshold = 0.1f, backdrop = controlsBackdrop)
+                    }
+                    Column(verticalArrangement = Arrangement.spacedBy(8f.dp)) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { BasicText("Refraction Amount", style = TextStyle(contentColor, 14f.sp)); BasicText("${refractionAmountDp.toInt()} dp", style = TextStyle(secondaryColor, 14f.sp)) }
+                        LiquidSlider(value = { refractionAmountDp }, onValueChange = { refractionAmountDp = it }, valueRange = 0f..64f, visibilityThreshold = 0.1f, backdrop = controlsBackdrop)
+                    }
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        BasicText("Chromatic Aberration", style = TextStyle(contentColor, 14f.sp))
+                        LiquidToggle(selected = { chromaticAberration }, onSelect = { chromaticAberration = it }, backdrop = controlsBackdrop)
+                    }
+                    Column(verticalArrangement = Arrangement.spacedBy(8f.dp)) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { BasicText("Horizontal Offset", style = TextStyle(contentColor, 14f.sp)); BasicText("${horizontalOffsetDp.toInt()} dp", style = TextStyle(secondaryColor, 14f.sp)) }
+                        LiquidSlider(value = { horizontalOffsetDp }, onValueChange = { horizontalOffsetDp = it }, valueRange = -150f..150f, visibilityThreshold = 1f, backdrop = controlsBackdrop)
+                    }
+                    Column(verticalArrangement = Arrangement.spacedBy(8f.dp)) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { BasicText("Vertical Offset", style = TextStyle(contentColor, 14f.sp)); BasicText("${verticalOffsetDp.toInt()} dp", style = TextStyle(secondaryColor, 14f.sp)) }
+                        LiquidSlider(value = { verticalOffsetDp }, onValueChange = { verticalOffsetDp = it }, valueRange = -150f..150f, visibilityThreshold = 1f, backdrop = controlsBackdrop)
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-private fun StandardGlassDropdownMenu(
+fun ExpandableGlassMenu(
     animatableProgress: Animatable<Float, *>,
     animationPreset: MenuAnimationPreset,
     animationSpeedMultiplier: Float = 1f,
-    containerBulgeMultiplier: Float = 0.395f,
-    contentBulgeMultiplier: Float = 0.15f,
-    contentPopX: Float = 0.03f,
-    contentPopY: Float = 0.01f,
-    dragJellyTension: Float = 0.05f,
-    motionBlurAmount: Float = 25f,
-    arcYOffsetDp: Float = 75f,
     alignment: MenuAlignment,
     backdrop: Backdrop,
     isGlassEnabled: Boolean,
@@ -307,6 +319,7 @@ private fun StandardGlassDropdownMenu(
     horizontalOffset: Float,
     verticalOffset: Float,
     modifier: Modifier = Modifier,
+    labelSize: Size = Size(55f, 55f),
     label: @Composable () -> Unit,
     content: @Composable (globalTouchPosition: Offset, closeMenu: () -> Unit, hoveredIndex: Int?, setHovered: (Int?) -> Unit) -> Unit
 ) {
@@ -316,8 +329,6 @@ private fun StandardGlassDropdownMenu(
     val animationScope = rememberCoroutineScope()
     
     var contentMeasuredSize by remember { mutableStateOf(Size.Zero) }
-    var labelMeasuredSize by remember { mutableStateOf(Size.Zero) }
-    
     var dragOffset by remember { mutableStateOf(Offset.Zero) }
     var isPressed by remember { mutableStateOf(false) }
     var isDragging by remember { mutableStateOf(false) }
@@ -327,7 +338,7 @@ private fun StandardGlassDropdownMenu(
     var hoveredIndex by remember { mutableStateOf<Int?>(null) }
     val setHovered: (Int?) -> Unit = { hoveredIndex = it }
 
-    val labelSizePx = if (labelMeasuredSize != Size.Zero) labelMeasuredSize else with(density) { Size(100.dp.toPx(), 40.dp.toPx()) }
+    val labelSizePx = with(density) { Size(labelSize.width.dp.toPx(), labelSize.height.dp.toPx()) }
 
     LaunchedEffect(hoveredIndex) {
         if (isHapticsEnabled && isDragging && hoveredIndex != null) {
@@ -340,18 +351,11 @@ private fun StandardGlassDropdownMenu(
         animationScope.launch { animatableProgress.animateTo(0f, animationPreset.getSpec(isClosing = true, speedMultiplier = animationSpeedMultiplier)) }
     }
 
-    Box(modifier = modifier, contentAlignment = alignment.composeAlignment) {
-        StandardGlassEffectContainer(
+    Box(modifier = modifier.fillMaxSize(), contentAlignment = alignment.composeAlignment) {
+        GlassEffectContainer(
             animatableProgress = animatableProgress,
             dragOffset = dragOffset,
             isPressed = isPressed,
-            containerBulgeMultiplier = containerBulgeMultiplier,
-            contentBulgeMultiplier = contentBulgeMultiplier,
-            contentPopX = contentPopX,
-            contentPopY = contentPopY,
-            dragJellyTension = dragJellyTension,
-            motionBlurAmount = motionBlurAmount,
-            arcYOffsetDp = arcYOffsetDp,
             alignment = alignment,
             backdrop = backdrop,
             isGlassEnabled = isGlassEnabled,
@@ -366,7 +370,7 @@ private fun StandardGlassDropdownMenu(
             contentSize = contentMeasuredSize,
             label = {
                 Box(
-                    modifier = Modifier.onSizeChanged { labelMeasuredSize = it.toSize() }.onGloballyPositioned { labelCoordinates = it }
+                    modifier = Modifier.size(with(density) { labelSizePx.width.toDp() }).onGloballyPositioned { labelCoordinates = it }
                         .pointerInput(animationPreset, animationSpeedMultiplier) {
                             awaitEachGesture {
                                 val down = awaitFirstDown(requireUnconsumed = false)
@@ -442,8 +446,8 @@ private fun StandardGlassDropdownMenu(
             },
             content = {
                 Column(
-                    modifier = Modifier.width(IntrinsicSize.Max).onSizeChanged { if (it.width > 0 && it.height > 0) contentMeasuredSize = it.toSize() }.padding(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier = Modifier.width(IntrinsicSize.Max).onSizeChanged { if (it.width > 0 && it.height > 0) contentMeasuredSize = it.toSize() }.padding(10f.dp),
+                    verticalArrangement = Arrangement.spacedBy(12f.dp)
                 ) {
                     content(globalTouchPosition, closeMenu, hoveredIndex, setHovered)
                 }
@@ -453,17 +457,10 @@ private fun StandardGlassDropdownMenu(
 }
 
 @Composable
-private fun StandardGlassEffectContainer(
+fun GlassEffectContainer(
     animatableProgress: Animatable<Float, *>,
     dragOffset: Offset,
     isPressed: Boolean,
-    containerBulgeMultiplier: Float,
-    contentBulgeMultiplier: Float,
-    contentPopX: Float,
-    contentPopY: Float,
-    dragJellyTension: Float,
-    motionBlurAmount: Float,
-    arcYOffsetDp: Float,
     alignment: MenuAlignment,
     backdrop: Backdrop,
     isGlassEnabled: Boolean,
@@ -485,18 +482,21 @@ private fun StandardGlassEffectContainer(
     val animatedDragX by animateFloatAsState(dragOffset.x, spring(stiffness = 400f, dampingRatio = 0.6f))
     val animatedDragY by animateFloatAsState(dragOffset.y, spring(stiffness = 400f, dampingRatio = 0.6f))
     
+    // Press illumination progress
     val isPressing = isPressed && animatableProgress.targetValue == 0f
     val buttonPressProgress by animateFloatAsState(if (isPressing) 1f else 0f, spring(dampingRatio = 0.6f, stiffness = 400f))
 
     Box(
         modifier = Modifier
+            // ZERO-RECOMPOSITION LAYOUT (Executes measuring natively without calling recompose)
             .layout { measurable, constraints ->
                 val p = animatableProgress.value
                 val widthDiff = (contentSize.width - labelSize.width).coerceAtLeast(0f)
                 val heightDiff = (contentSize.height - labelSize.height).coerceAtLeast(0f)
 
-                val widthProgress = if (p > 1f) 1f + (p - 1f) * containerBulgeMultiplier else (p * p)
-                val heightProgress = if (p > 1f) 1f + (p - 1f) * containerBulgeMultiplier else sin(p * (PI / 2f)).toFloat()
+                // Vertical Pill Morph (Height pops instantly, width follows softly)
+                val widthProgress = if (p > 1f) 1f + (p - 1f) * 0.395f else (p * p)
+                val heightProgress = if (p > 1f) 1f + (p - 1f) * 0.395f else sin(p * (PI / 2f)).toFloat()
 
                 val currentWidthPx = labelSize.width + widthDiff * widthProgress
                 val currentHeightPx = labelSize.height + heightDiff * heightProgress
@@ -516,7 +516,7 @@ private fun StandardGlassEffectContainer(
                 val blurProgress = if (progress > 0.5f) (1f - progress) / 0.5f else progress / 0.5f
                 val squishScale = 1f - (blurProgress.coerceIn(0f, 1f) * 0.05f)
 
-                val maxOffsetPx = with(density) { arcYOffsetDp.dp.toPx() }
+                val maxOffsetPx = with(density) { 75f.dp.toPx() }
                 val offsetY = alignment.calculateOffsetY(blurProgress, maxOffsetPx)
 
                 val w = size.width
@@ -525,7 +525,7 @@ private fun StandardGlassEffectContainer(
                 val maxDim = max(w, h)
 
                 val maxJellyOffset = minDim
-                val initialDerivative = dragJellyTension
+                val initialDerivative = 0.05f
                 val jellyTx = if (maxJellyOffset > 0f) maxJellyOffset * tanh(initialDerivative * animatedDragX / maxJellyOffset) else 0f
                 val jellyTy = if (maxJellyOffset > 0f) maxJellyOffset * tanh(initialDerivative * animatedDragY / maxJellyOffset) else 0f
                 
@@ -554,15 +554,15 @@ private fun StandardGlassEffectContainer(
                     val progress = animatableProgress.value
                     if (isGlassEnabled) {
                         val blurProgress = if (progress > 0.5f) (1f - progress) / 0.5f else progress / 0.5f
-                        val motionBlur = motionBlurAmount * sin(progress.coerceIn(0f, 1f) * PI).toFloat()
+                        val motionBlur = 25f * sin(progress.coerceIn(0f, 1f) * PI).toFloat()
                         vibrancy()
                         blur((2f + blurRadius * blurProgress.coerceIn(0f, 1f) + motionBlur).dp.toPx())
                         lens(refractionHeight.dp.toPx(), refractionAmount.dp.toPx(), depthEffect = true, chromaticAberration = chromaticAberration)
                     }
                 },
                 highlight = { if (isGlassEnabled) Highlight.Default.copy(alpha = 0.65f) else null },
-                shadow = { Shadow(radius = 18.dp, color = Color.Black.copy(alpha = 0.12f)) },
-                innerShadow = { if (isGlassEnabled) InnerShadow(radius = 10.dp, color = Color.White.copy(alpha = 0.25f)) else null },
+                shadow = { Shadow(radius = 18f.dp, color = Color.Black.copy(alpha = 0.12f)) },
+                innerShadow = { if (isGlassEnabled) InnerShadow(radius = 10f.dp, color = Color.White.copy(alpha = 0.25f)) else null },
                 onDrawSurface = {
                     val progress = animatableProgress.value
                     val cr = cornerRadius.toPx()
@@ -583,15 +583,16 @@ private fun StandardGlassEffectContainer(
                 .wrapContentSize(unbounded = true, align = alignment.composeAlignment) 
                 .graphicsLayer {
                     val progress = animatableProgress.value
-                    val rawContentProgress = if (progress > 1f) 1f + (progress - 1f) * contentBulgeMultiplier else (progress - 0.35f) / 0.65f
+                    val rawContentProgress = if (progress > 1f) 1f + (progress - 1f) * 0.15f else (progress - 0.35f) / 0.65f
                     val minAspectScale = if (contentSize.width > 0f && contentSize.height > 0f) { min(labelSize.width / contentSize.width, labelSize.height / contentSize.height) } else 1f
                     val baseScale = minAspectScale + (1f - minAspectScale) * rawContentProgress
                     
+                    // iOS Squish stretching from the absolute center
                     val pop = sin(progress.coerceIn(0f, 1f) * PI).toFloat()
                     
                     alpha = rawContentProgress.coerceIn(0f, 1f)
-                    scaleX = baseScale + pop * contentPopX
-                    scaleY = baseScale + pop * contentPopY
+                    scaleX = baseScale + pop * 0.03f
+                    scaleY = baseScale + pop * 0.01f
                     this.transformOrigin = TransformOrigin.Center
                 }
         ) {
@@ -611,10 +612,12 @@ private fun StandardGlassEffectContainer(
 }
 
 @Composable
-private fun DropdownItemRow(
+fun MenuRow(
+    icon: ImageVector,
     title: String,
+    description: String,
     contentColor: Color,
-    isSelected: Boolean,
+    secondaryColor: Color,
     isHovered: Boolean,
     onHoverChange: (Boolean) -> Unit,
     globalTouchPosition: Offset,
@@ -632,13 +635,14 @@ private fun DropdownItemRow(
     val hoverAlpha by animateFloatAsState(if (isHovered) 0.1f else 0f, tween(150))
 
     Row(
-        modifier = Modifier.fillMaxWidth().onGloballyPositioned { rowCoords = it }.clip(RoundedCornerShape(12.dp)).clickable { onClick() }.background(contentColor.copy(alpha = hoverAlpha)).padding(horizontal = 16.dp, vertical = 12.dp),
+        modifier = Modifier.fillMaxWidth().onGloballyPositioned { rowCoords = it }.clip(RoundedCornerShape(14f.dp)).clickable { onClick() }.background(contentColor.copy(alpha = hoverAlpha)).padding(horizontal = 10f.dp, vertical = 6f.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+        horizontalArrangement = Arrangement.spacedBy(14f.dp)
     ) {
-        BasicText(title, style = TextStyle(contentColor, 15.sp, FontWeight.Medium))
-        if (isSelected) {
-            BasicText("✓", style = TextStyle(Color(0xFF0088FF), 15.sp, FontWeight.Bold))
+        Box(modifier = Modifier.size(24f.dp).paint(rememberVectorPainter(icon), colorFilter = ColorFilter.tint(contentColor)))
+        Column(verticalArrangement = Arrangement.spacedBy(2f.dp)) {
+            BasicText(title, style = TextStyle(contentColor, 15f.sp, FontWeight.SemiBold))
+            BasicText(description, style = TextStyle(secondaryColor, 12f.sp), maxLines = 1)
         }
     }
 }
