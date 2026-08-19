@@ -577,7 +577,7 @@ fun GlassEffectContainer(
                 .wrapContentSize(unbounded = true, align = alignment.composeAlignment) 
                 .graphicsLayer {
                     val progress = animatableProgress.value
-                    val rawContentProgress = (progress - 0.35f) / 0.65f
+                    val rawContentProgress = if (progress > 1f) 1f + (progress - 1f) * 0.15f else (progress - 0.35f) / 0.65f
                     val minAspectScale = if (contentSize.width > 0f && contentSize.height > 0f) { min(labelSize.width / contentSize.width, labelSize.height / contentSize.height) } else 1f
                     val baseScale = minAspectScale + (1f - minAspectScale) * rawContentProgress
                     
