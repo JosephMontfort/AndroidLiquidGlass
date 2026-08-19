@@ -505,7 +505,8 @@ fun GlassEffectContainer(
             }
             .graphicsLayer {
                 val progress = animatableProgress.value
-                val blurProgress = if (progress > 0.5f) (1f - progress) / 0.5f else progress / 0.5f
+                val safeP = progress.coerceIn(0f, 1f)
+                val blurProgress = if (safeP > 0.5f) (1f - safeP) / 0.5f else safeP / 0.5f
                 val squishScale = 1f - (blurProgress.coerceIn(0f, 1f) * 0.05f)
 
                 val maxOffsetPx = with(density) { 75f.dp.toPx() }
@@ -545,7 +546,8 @@ fun GlassEffectContainer(
                 effects = {
                     val progress = animatableProgress.value
                     if (isGlassEnabled) {
-                        val blurProgress = if (progress > 0.5f) (1f - progress) / 0.5f else progress / 0.5f
+                        val safeP = progress.coerceIn(0f, 1f)
+                val blurProgress = if (safeP > 0.5f) (1f - safeP) / 0.5f else safeP / 0.5f
                         val motionBlur = 25f * sin(progress.coerceIn(0f, 1f) * PI).toFloat()
                         vibrancy()
                         blur((2f + blurRadius * blurProgress.coerceIn(0f, 1f) + motionBlur).dp.toPx())
