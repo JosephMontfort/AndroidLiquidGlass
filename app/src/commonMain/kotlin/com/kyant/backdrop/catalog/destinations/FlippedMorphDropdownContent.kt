@@ -1,6 +1,9 @@
 package com.kyant.backdrop.catalog.destinations
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -136,7 +139,9 @@ fun FlippedMorphDropdownContent() {
     // 3D Flip Tuning State
     var flipDegreesX by remember { mutableFloatStateOf(180f) }
     var flipDegreesY by remember { mutableFloatStateOf(0f) }
-    var flipCameraDistance by remember { mutableFloatStateOf(16f) }
+    var flipCameraDistance by remember { mutableFloatStateOf(32f) }
+    var flipOvershootMultiplier by remember { mutableFloatStateOf(0.5f) }
+    var flipDepthScale by remember { mutableFloatStateOf(0.1f) }
 
     val animationScope = rememberCoroutineScope()
     val animatableProgress = remember { Animatable(0f) }
@@ -172,6 +177,8 @@ fun FlippedMorphDropdownContent() {
                     flipDegreesX = flipDegreesX,
                     flipDegreesY = flipDegreesY,
                     flipCameraDistance = flipCameraDistance,
+                    flipOvershootMultiplier = flipOvershootMultiplier,
+                    flipDepthScale = flipDepthScale,
                     alignment = selectedAlignment,
                     backdrop = backdrop,
                     isGlassEnabled = isGlassEnabled,
@@ -242,13 +249,23 @@ fun FlippedMorphDropdownContent() {
                     }
                 }
 
+                // LAYOUT OFFSETS SECTION (Moved above Glass Settings)
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    BasicText("Layout Translation", style = TextStyle(contentColor, 18.sp, FontWeight.SemiBold))
+
+                    TuningControl("Horizontal Offset", "Static layout shift.", horizontalOffsetDp, 0f, { horizontalOffsetDp = it }, -150f..150f, { "${it.toInt()} dp" }, controlsBackdrop, contentColor, secondaryColor)
+                    TuningControl("Vertical Offset", "Static layout shift.", verticalOffsetDp, 0f, { verticalOffsetDp = it }, -150f..150f, { "${it.toInt()} dp" }, controlsBackdrop, contentColor, secondaryColor)
+                }
+
                 // 3D FLIP TUNING SECTION
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     BasicText("3D Flip Mechanics", style = TextStyle(contentColor, 18.sp, FontWeight.SemiBold))
                     
                     TuningControl("Flip Axis X", "Vertical rotation magnitude in degrees.", flipDegreesX, 180f, { flipDegreesX = it }, -360f..360f, { "${it.toInt()}°" }, controlsBackdrop, contentColor, secondaryColor)
                     TuningControl("Flip Axis Y", "Horizontal rotation magnitude in degrees.", flipDegreesY, 0f, { flipDegreesY = it }, -360f..360f, { "${it.toInt()}°" }, controlsBackdrop, contentColor, secondaryColor)
-                    TuningControl("Camera Distance", "Controls perspective distortion. Lower values increase edge flare.", flipCameraDistance, 16f, { flipCameraDistance = it }, 1f..100f, { String.format("%.1f", it) }, controlsBackdrop, contentColor, secondaryColor)
+                    TuningControl("Camera Distance", "Controls perspective distortion. Higher values flatten the 3D effect.", flipCameraDistance, 32f, { flipCameraDistance = it }, 1f..100f, { String.format("%.1f", it) }, controlsBackdrop, contentColor, secondaryColor)
+                    TuningControl("Flip Depth Scale", "Amount the card shrinks into the Z-axis during flip to add 3D clearance.", flipDepthScale, 0.1f, { flipDepthScale = it }, 0f..0.5f, { String.format("%.3f", it) }, controlsBackdrop, contentColor, secondaryColor)
+                    TuningControl("Flip Overshoot Dampener", "Friction applied specifically to 3D rotation during spring overshoot.", flipOvershootMultiplier, 0.5f, { flipOvershootMultiplier = it }, 0f..1f, { String.format("%.3f", it) }, controlsBackdrop, contentColor, secondaryColor)
                 }
 
                 // ADVANCED PHYSICS TUNING SECTION
@@ -265,12 +282,9 @@ fun FlippedMorphDropdownContent() {
                     TuningControl("Arc Y-Axis Limit", "The physical ceiling of the triangular wave driving vertical arcs.", arcYOffsetDp, 75f, { arcYOffsetDp = it }, 0f..250f, { "${it.toInt()} dp" }, controlsBackdrop, contentColor, secondaryColor)
                 }
 
-                // LAYOUT & GLASS RENDERING SECTION
+                // GLASS RENDERING SECTION
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    BasicText("Layout & Glass Rendering", style = TextStyle(contentColor, 18.sp, FontWeight.SemiBold))
-
-                    TuningControl("Horizontal Offset", null, horizontalOffsetDp, 0f, { horizontalOffsetDp = it }, -150f..150f, { "${it.toInt()} dp" }, controlsBackdrop, contentColor, secondaryColor)
-                    TuningControl("Vertical Offset", null, verticalOffsetDp, 0f, { verticalOffsetDp = it }, -150f..150f, { "${it.toInt()} dp" }, controlsBackdrop, contentColor, secondaryColor)
+                    BasicText("Glass Rendering", style = TextStyle(contentColor, 18.sp, FontWeight.SemiBold))
 
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         BasicText("Glass Effect", style = TextStyle(contentColor, 14.sp))
@@ -311,7 +325,9 @@ fun FlippedExpandableGlassMenu(
     arcYOffsetDp: Float = 75f,
     flipDegreesX: Float = 180f,
     flipDegreesY: Float = 0f,
-    flipCameraDistance: Float = 16f,
+    flipCameraDistance: Float = 32f,
+    flipOvershootMultiplier: Float = 0.5f,
+    flipDepthScale: Float = 0.1f,
     alignment: MenuAlignment,
     backdrop: Backdrop,
     isGlassEnabled: Boolean,
@@ -371,6 +387,8 @@ fun FlippedExpandableGlassMenu(
             flipDegreesX = flipDegreesX,
             flipDegreesY = flipDegreesY,
             flipCameraDistance = flipCameraDistance,
+            flipOvershootMultiplier = flipOvershootMultiplier,
+            flipDepthScale = flipDepthScale,
             alignment = alignment,
             backdrop = backdrop,
             isGlassEnabled = isGlassEnabled,
@@ -397,7 +415,7 @@ fun FlippedExpandableGlassMenu(
                                 var isSimpleDrag = false
                                 var upEvent: androidx.compose.ui.input.pointer.PointerInputChange? = null
                                 
-                                val isCurrentlyExpanded = animatableProgress.targetValue > 0.5f
+                                val isExpanded = animatableProgress.value > 0.5f
                                 
                                 val timeoutResult = withTimeoutOrNull(tapTimeout) {
                                     while (true) {
@@ -416,7 +434,7 @@ fun FlippedExpandableGlassMenu(
                                     true
                                 }
 
-                                if (timeoutResult == null && !isCurrentlyExpanded) {
+                                if (timeoutResult == null && !isExpanded) {
                                     isLongPress = true
                                     animationScope.launch { animatableProgress.animateTo(1f, animationPreset.getSpec(isClosing = false, speedMultiplier = animationSpeedMultiplier)) }
                                 }
@@ -430,7 +448,7 @@ fun FlippedExpandableGlassMenu(
                                         tracking = false
                                     } else {
                                         dragOffset = change.position - downPos
-                                        if (isLongPress || isCurrentlyExpanded) {
+                                        if (isLongPress || isExpanded) {
                                             globalTouchPosition = labelCoordinates?.localToWindow(change.position) ?: Offset.Unspecified
                                         }
                                         change.consume()
@@ -443,10 +461,12 @@ fun FlippedExpandableGlassMenu(
 
                                 if (upEvent != null && !isSimpleDrag && !isLongPress && timeoutResult != null) {
                                     upEvent.consume()
-                                    val target = if (isCurrentlyExpanded) 0f else 1f
+                                    val target = if (isExpanded) 0f else 1f
                                     animationScope.launch { animatableProgress.animateTo(target, animationPreset.getSpec(isClosing = target == 0f, speedMultiplier = animationSpeedMultiplier)) }
-                                } else if (finalHoveredIndex != null || dragOffset.getDistance() > 20f) {
-                                    closeMenu()
+                                } else if ((isSimpleDrag || isLongPress) && isExpanded) {
+                                    if (finalHoveredIndex != null || dragOffset.getDistance() > 20f) {
+                                        closeMenu()
+                                    }
                                 }
                                 
                                 dragOffset = Offset.Zero
@@ -484,6 +504,8 @@ fun FlippedGlassEffectContainer(
     flipDegreesX: Float,
     flipDegreesY: Float,
     flipCameraDistance: Float,
+    flipOvershootMultiplier: Float,
+    flipDepthScale: Float,
     alignment: MenuAlignment,
     backdrop: Backdrop,
     isGlassEnabled: Boolean,
@@ -531,7 +553,7 @@ fun FlippedGlassEffectContainer(
                 )
                 layout(placeable.width, placeable.height) { placeable.place(0, 0) }
             }
-            // OUTER LAYER: Alignment-based Translation and Squish
+            // OUTER LAYER: Translates alignment perfectly without shifting geometry.
             .graphicsLayer {
                 val progress = animatableProgress.value
                 val blurProgress = if (progress > 0.5f) (1f - progress) / 0.5f else progress / 0.5f
@@ -561,19 +583,26 @@ fun FlippedGlassEffectContainer(
                 val expandedTy = -animatedDragY * 0.03f
                 val expandedStretchX = (1f + abs(animatedDragX) * 0.00005f - abs(animatedDragY) * 0.00005f).coerceIn(0.99f, 1.01f)
                 val expandedStretchY = (1f + abs(animatedDragY) * 0.00005f - abs(animatedDragX) * 0.00005f).coerceIn(0.99f, 1.01f)
+                
+                // NEW: 3D Depth Shrink Illusion
+                val depthProgress = sin(progress.coerceIn(0f, 1f) * PI).toFloat()
+                val depthShrink = 1f - (depthProgress * flipDepthScale)
 
                 translationX = lerp(jellyTx, expandedTx, progress) + with(density) { horizontalOffset.dp.toPx() * progress }
                 translationY = offsetY + lerp(jellyTy, expandedTy, progress) + with(density) { verticalOffset.dp.toPx() * progress }
-                scaleX = squishScale * lerp(jellySx, expandedStretchX, progress)
-                scaleY = squishScale * lerp(jellySy, expandedStretchY, progress)
+                
+                scaleX = squishScale * lerp(jellySx, expandedStretchX, progress) * depthShrink
+                scaleY = squishScale * lerp(jellySy, expandedStretchY, progress) * depthShrink
                 
                 this.transformOrigin = alignment.transformOrigin
             }
-            // INNER LAYER: Absolute Center 3D Flip
+            // INNER LAYER: Absolute Center 3D Flip (ZERO rotation at resting state)
             .graphicsLayer {
                 val progress = animatableProgress.value
-                rotationX = flipDegreesX * (1f - progress)
-                rotationY = flipDegreesY * (1f - progress)
+                val flipProgress = if (progress > 1f) 1f + (progress - 1f) * flipOvershootMultiplier else progress
+                
+                rotationX = flipDegreesX * flipProgress
+                rotationY = flipDegreesY * flipProgress
                 cameraDistance = flipCameraDistance
                 this.transformOrigin = TransformOrigin.Center
             }
@@ -606,36 +635,46 @@ fun FlippedGlassEffectContainer(
                 }
             )
             .clip(RoundedCornerShape(cornerRadius)),
-        contentAlignment = alignment.composeAlignment
+        contentAlignment = Alignment.Center // Center content so flip origin is unified
     ) {
+        // BACK FACE: Menu Content
         Box(
             modifier = Modifier
-                .wrapContentSize(unbounded = true, align = alignment.composeAlignment) 
+                .wrapContentSize(unbounded = true, align = Alignment.Center) 
                 .graphicsLayer {
                     val progress = animatableProgress.value
-                    val rawContentProgress = if (progress > 1f) 1f + (progress - 1f) * contentBulgeMultiplier else (progress - 0.35f) / 0.65f
-                    val minAspectScale = if (contentSize.width > 0f && contentSize.height > 0f) { min(labelSize.width / contentSize.width, labelSize.height / contentSize.height) } else 1f
-                    val baseScale = minAspectScale + (1f - minAspectScale) * rawContentProgress
                     
+                    // Fade in perfectly AFTER the card passes the edge-on point
+                    val contentOpacity = ((progress - 0.5f) / 0.5f).coerceIn(0f, 1f)
+                    val contentScaleProgress = if (progress > 1f) 1f + (progress - 1f) * contentBulgeMultiplier else contentOpacity
+                    
+                    val minAspectScale = if (contentSize.width > 0f && contentSize.height > 0f) { min(labelSize.width / contentSize.width, labelSize.height / contentSize.height) } else 1f
+                    val baseScale = minAspectScale + (1f - minAspectScale) * contentScaleProgress
                     val pop = sin(progress.coerceIn(0f, 1f) * PI).toFloat()
                     
-                    alpha = rawContentProgress.coerceIn(0f, 1f)
+                    alpha = contentOpacity
                     scaleX = baseScale + pop * contentPopX
                     scaleY = baseScale + pop * contentPopY
+                    
+                    // Pre-counter-rotate the back face so it's readable when the card flips over
+                    rotationX = -flipDegreesX
+                    rotationY = -flipDegreesY
                     this.transformOrigin = TransformOrigin.Center
                 }
         ) {
             content()
         }
 
+        // FRONT FACE: FAB Label
         Box(
             modifier = Modifier.graphicsLayer { 
                 val progress = animatableProgress.value
-                val labelOpacity = (progress / 0.35f).coerceIn(0f, 1f)
+                
+                // Fade out exactly as the card reaches edge-on
+                val labelOpacity = (progress / 0.5f).coerceIn(0f, 1f)
                 alpha = 1f - labelOpacity 
                 
-                rotationX = -flipDegreesX
-                rotationY = -flipDegreesY
+                // Zero rotation required: it lives natively on the front face
                 this.transformOrigin = TransformOrigin.Center
             }
         ) {
