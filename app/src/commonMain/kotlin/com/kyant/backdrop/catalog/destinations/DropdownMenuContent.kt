@@ -487,8 +487,8 @@ fun GlassEffectContainer(
                 val heightDiff = (contentSize.height - labelSize.height).coerceAtLeast(0f)
 
                 // Vertical Pill Morph (Height pops instantly, width follows softly)
-                val widthProgress = (p * p).coerceIn(0f, 1f)
-                val heightProgress = sin(p.coerceIn(0f, 1f) * (PI / 2f)).toFloat()
+                val widthProgress = if (p > 1f) p else (p * p)
+                val heightProgress = if (p > 1f) p else sin(p * (PI / 2f)).toFloat()
 
                 val currentWidthPx = labelSize.width + widthDiff * widthProgress
                 val currentHeightPx = labelSize.height + heightDiff * heightProgress
@@ -577,14 +577,14 @@ fun GlassEffectContainer(
                 .wrapContentSize(unbounded = true, align = alignment.composeAlignment) 
                 .graphicsLayer {
                     val progress = animatableProgress.value
-                    val contentProgress = ((progress - 0.35f) / 0.65f).coerceIn(0f, 1f)
+                    val rawContentProgress = (progress - 0.35f) / 0.65f
                     val minAspectScale = if (contentSize.width > 0f && contentSize.height > 0f) { min(labelSize.width / contentSize.width, labelSize.height / contentSize.height) } else 1f
-                    val baseScale = minAspectScale + (1f - minAspectScale) * contentProgress
+                    val baseScale = minAspectScale + (1f - minAspectScale) * rawContentProgress
                     
                     // iOS Squish stretching from the absolute center
                     val pop = sin(progress.coerceIn(0f, 1f) * PI).toFloat()
                     
-                    alpha = contentProgress
+                    alpha = rawContentProgress.coerceIn(0f, 1f)
                     scaleX = baseScale + pop * 0.03f
                     scaleY = baseScale + pop * 0.01f
                     this.transformOrigin = TransformOrigin.Center
