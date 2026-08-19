@@ -487,8 +487,8 @@ fun GlassEffectContainer(
                 val heightDiff = (contentSize.height - labelSize.height).coerceAtLeast(0f)
 
                 // Vertical Pill Morph (Height pops instantly, width follows softly)
-                val widthProgress = if (p > 1f) p else (p * p)
-                val heightProgress = if (p > 1f) p else sin(p * (PI / 2f)).toFloat()
+                val widthProgress = if (p > 1f) 1f + (p - 1f) * 0.395f else (p * p)
+                val heightProgress = if (p > 1f) 1f + (p - 1f) * 0.395f else sin(p * (PI / 2f)).toFloat()
 
                 val currentWidthPx = labelSize.width + widthDiff * widthProgress
                 val currentHeightPx = labelSize.height + heightDiff * heightProgress
