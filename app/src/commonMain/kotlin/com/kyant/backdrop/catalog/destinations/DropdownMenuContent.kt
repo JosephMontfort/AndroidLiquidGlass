@@ -68,7 +68,7 @@ import androidx.compose.ui.unit.toSize
 import androidx.compose.ui.util.fastCoerceAtMost
 import androidx.compose.ui.util.lerp
 import com.kyant.backdrop.Backdrop
-import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import com.kyant.backdrop.backdrops.emptyBackdrop
 import com.kyant.backdrop.catalog.BackdropDemoScaffold
 import com.kyant.backdrop.catalog.components.LiquidButton
 import com.kyant.backdrop.catalog.components.LiquidToggle
@@ -108,7 +108,7 @@ fun DropdownMenuContent() {
     var selectedIndex by remember { mutableStateOf(0) }
     
     // Glass Design State
-    var cornerRadiusDp by remember { mutableFloatStateOf(24f) }
+    var cornerRadiusDp by remember { mutableFloatStateOf(20f) }
     var blurRadiusDp by remember { mutableFloatStateOf(10f) }
     var refractionHeightDp by remember { mutableFloatStateOf(16f) }
     var refractionAmountDp by remember { mutableFloatStateOf(20f) }
@@ -130,12 +130,10 @@ fun DropdownMenuContent() {
     val animatableProgress = remember { Animatable(0f) }
 
     BackdropDemoScaffold { backdrop ->
-        val controlsBackdrop = rememberLayerBackdrop()
-
         Column(
             modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 16.dp)
         ) {
-            BasicText("Standard Dropdown", Modifier.padding(top = 16.dp, bottom = 4.dp), style = TextStyle(contentColor, 26.sp, FontWeight.SemiBold))
+            BasicText("Settings Row Dropdown", Modifier.padding(top = 16.dp, bottom = 4.dp), style = TextStyle(contentColor, 26.sp, FontWeight.SemiBold))
             BasicText("Preview", style = TextStyle(Color(0xFF0088FF), 15.sp, FontWeight.Medium))
 
             // PREVIEW BOX (Horizontal Layout)
@@ -150,9 +148,9 @@ fun DropdownMenuContent() {
                     }
             ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(24.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 24.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Top
+                    verticalAlignment = Alignment.Top // Ensures dropdown expands downward relative to the row
                 ) {
                     BasicText("Playback Quality", style = TextStyle(contentColor, 18.sp, FontWeight.SemiBold), modifier = Modifier.padding(top = 10.dp))
                     
@@ -179,9 +177,8 @@ fun DropdownMenuContent() {
                         horizontalOffset = horizontalOffsetDp,
                         verticalOffset = verticalOffsetDp,
                         label = {
-                            Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                                BasicText("Option ${selectedIndex + 1}", style = TextStyle(contentColor, 15.sp, FontWeight.Medium))
-                                Spacer(Modifier.width(12.dp))
+                            Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                BasicText("Option ${selectedIndex + 1}", style = TextStyle(contentColor, 16.sp, FontWeight.Medium))
                                 BasicText("▼", style = TextStyle(contentColor.copy(0.6f), 10.sp))
                             }
                         }
@@ -206,21 +203,21 @@ fun DropdownMenuContent() {
 
             Spacer(Modifier.height(16.dp))
             Column(
-                modifier = Modifier.fillMaxWidth().weight(1f).padding(bottom = 16.dp).clip(RoundedCornerShape(24.dp)).drawBackdrop(backdrop = backdrop, shape = { RoundedCornerShape(24.dp) }, effects = { vibrancy(); blur(8.dp.toPx()); lens(16.dp.toPx(), 32.dp.toPx()) }, highlight = { Highlight.Plain }, exportedBackdrop = controlsBackdrop, onDrawSurface = { drawRect(cardBackground) }).verticalScroll(rememberScrollState()).padding(20.dp),
+                modifier = Modifier.fillMaxWidth().weight(1f).padding(bottom = 16.dp).clip(RoundedCornerShape(24.dp)).background(cardBackground).verticalScroll(rememberScrollState()).padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
                 // CORE PROPERTIES SECTION
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     BasicText("Core Properties", style = TextStyle(contentColor, 18.sp, FontWeight.SemiBold))
 
-                    TuningControl("Menu Items", "Number of options to display in opened menu.", itemCount, 4f, { itemCount = it }, 1f..10f, { "${it.toInt()}" }, controlsBackdrop, contentColor, secondaryColor)
+                    TuningControl("Menu Items", "Number of options to display in opened menu.", itemCount, 4f, { itemCount = it }, 1f..10f, { "${it.toInt()}" }, emptyBackdrop(), contentColor, secondaryColor)
 
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         BasicText("Animation Trigger", style = TextStyle(contentColor, 14.sp))
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             MenuAnimationPreset.entries.forEach { preset ->
                                 val isSelected = selectedPreset == preset
-                                LiquidButton(onClick = { selectedPreset = preset; val target = if (animatableProgress.value > 0.5f) 0f else 1f; animationScope.launch { animatableProgress.animateTo(target, preset.getSpec(isClosing = target == 0f, speedMultiplier = animationSpeedMultiplier)) } }, backdrop = controlsBackdrop, modifier = Modifier.weight(1f).height(42.dp), tint = if (isSelected) Color(0xFF0088FF) else Color.Unspecified, surfaceColor = if (isSelected) Color.Unspecified else Color.White.copy(0.15f)) {
+                                LiquidButton(onClick = { selectedPreset = preset; val target = if (animatableProgress.value > 0.5f) 0f else 1f; animationScope.launch { animatableProgress.animateTo(target, preset.getSpec(isClosing = target == 0f, speedMultiplier = animationSpeedMultiplier)) } }, backdrop = emptyBackdrop(), modifier = Modifier.weight(1f).height(42.dp), tint = if (isSelected) Color(0xFF0088FF) else Color.Unspecified, surfaceColor = if (isSelected) Color.Unspecified else Color.White.copy(0.15f)) {
                                     BasicText(preset.label, style = TextStyle(if (isSelected) Color.White else contentColor, 13.sp, FontWeight.Medium))
                                 }
                             }
@@ -229,7 +226,7 @@ fun DropdownMenuContent() {
 
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         BasicText("Haptic Feedback", style = TextStyle(contentColor, 14.sp))
-                        LiquidToggle(selected = { isHapticsEnabled }, onSelect = { isHapticsEnabled = it }, backdrop = controlsBackdrop)
+                        LiquidToggle(selected = { isHapticsEnabled }, onSelect = { isHapticsEnabled = it }, backdrop = emptyBackdrop())
                     }
                 }
 
@@ -237,22 +234,22 @@ fun DropdownMenuContent() {
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     BasicText("Layout Translation", style = TextStyle(contentColor, 18.sp, FontWeight.SemiBold))
 
-                    TuningControl("Horizontal Offset", "Static layout shift.", horizontalOffsetDp, 0f, { horizontalOffsetDp = it }, -150f..150f, { "${it.toInt()} dp" }, controlsBackdrop, contentColor, secondaryColor)
-                    TuningControl("Vertical Offset", "Static layout shift.", verticalOffsetDp, 0f, { verticalOffsetDp = it }, -150f..150f, { "${it.toInt()} dp" }, controlsBackdrop, contentColor, secondaryColor)
+                    TuningControl("Horizontal Offset", "Static layout shift.", horizontalOffsetDp, 0f, { horizontalOffsetDp = it }, -150f..150f, { "${it.toInt()} dp" }, emptyBackdrop(), contentColor, secondaryColor)
+                    TuningControl("Vertical Offset", "Static layout shift.", verticalOffsetDp, 0f, { verticalOffsetDp = it }, -150f..150f, { "${it.toInt()} dp" }, emptyBackdrop(), contentColor, secondaryColor)
                 }
 
                 // ADVANCED PHYSICS TUNING SECTION
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     BasicText("Advanced Physics Tuning", style = TextStyle(contentColor, 18.sp, FontWeight.SemiBold))
 
-                    TuningControl("Animation Speed", "Multiplies the entire spring natural frequency & tween duration.", animationSpeedMultiplier, 1f, { animationSpeedMultiplier = it }, 0.1f..4f, { "${String.format("%.2f", it)}x" }, controlsBackdrop, contentColor, secondaryColor)
-                    TuningControl("Container Bulge Ratio", "Friction dampener for physical bounds expansion during spring overshoot.", containerBulgeMultiplier, 0.395f, { containerBulgeMultiplier = it }, 0f..1f, { String.format("%.3f", it) }, controlsBackdrop, contentColor, secondaryColor)
-                    TuningControl("Inner Content Bulge Ratio", "Friction dampener applied to inner text scaling during overshoot to prevent extreme ballooning.", contentBulgeMultiplier, 0.15f, { contentBulgeMultiplier = it }, 0f..1f, { String.format("%.3f", it) }, controlsBackdrop, contentColor, secondaryColor)
-                    TuningControl("Content Pop X Amplitude", "Horizontal absolute scale addition during the animation sine wave.", contentPopX, 0.03f, { contentPopX = it }, 0f..0.2f, { String.format("%.3f", it) }, controlsBackdrop, contentColor, secondaryColor)
-                    TuningControl("Content Pop Y Amplitude", "Vertical absolute scale addition during the animation sine wave.", contentPopY, 0.01f, { contentPopY = it }, 0f..0.2f, { String.format("%.3f", it) }, controlsBackdrop, contentColor, secondaryColor)
-                    TuningControl("Drag Jelly Tension", "The hyperbolic tangent derivative controlling fluid squish resistance during finger dragging.", dragJellyTension, 0.05f, { dragJellyTension = it }, 0.01f..0.2f, { String.format("%.3f", it) }, controlsBackdrop, contentColor, secondaryColor)
-                    TuningControl("Motion Blur Peak", "Maximum directional blur generated at highest velocity points of the animation.", motionBlurAmount, 25f, { motionBlurAmount = it }, 0f..80f, { "${it.toInt()} dp" }, controlsBackdrop, contentColor, secondaryColor)
-                    TuningControl("Arc Y-Axis Limit", "The physical ceiling of the triangular wave driving the vertical translation arc.", arcYOffsetDp, 75f, { arcYOffsetDp = it }, 0f..250f, { "${it.toInt()} dp" }, controlsBackdrop, contentColor, secondaryColor)
+                    TuningControl("Animation Speed", "Multiplies the entire spring natural frequency & tween duration.", animationSpeedMultiplier, 1f, { animationSpeedMultiplier = it }, 0.1f..4f, { "${String.format("%.2f", it)}x" }, emptyBackdrop(), contentColor, secondaryColor)
+                    TuningControl("Container Bulge Ratio", "Friction dampener for physical bounds expansion during spring overshoot.", containerBulgeMultiplier, 0.395f, { containerBulgeMultiplier = it }, 0f..1f, { String.format("%.3f", it) }, emptyBackdrop(), contentColor, secondaryColor)
+                    TuningControl("Inner Content Bulge Ratio", "Friction dampener applied to inner text scaling during overshoot.", contentBulgeMultiplier, 0.15f, { contentBulgeMultiplier = it }, 0f..1f, { String.format("%.3f", it) }, emptyBackdrop(), contentColor, secondaryColor)
+                    TuningControl("Content Pop X Amplitude", "Horizontal absolute scale addition during the animation sine wave.", contentPopX, 0.03f, { contentPopX = it }, 0f..0.2f, { String.format("%.3f", it) }, emptyBackdrop(), contentColor, secondaryColor)
+                    TuningControl("Content Pop Y Amplitude", "Vertical absolute scale addition during the animation sine wave.", contentPopY, 0.01f, { contentPopY = it }, 0f..0.2f, { String.format("%.3f", it) }, emptyBackdrop(), contentColor, secondaryColor)
+                    TuningControl("Drag Jelly Tension", "The hyperbolic tangent derivative controlling fluid squish resistance.", dragJellyTension, 0.05f, { dragJellyTension = it }, 0.01f..0.2f, { String.format("%.3f", it) }, emptyBackdrop(), contentColor, secondaryColor)
+                    TuningControl("Motion Blur Peak", "Maximum directional blur generated at highest velocity points.", motionBlurAmount, 25f, { motionBlurAmount = it }, 0f..80f, { "${it.toInt()} dp" }, emptyBackdrop(), contentColor, secondaryColor)
+                    TuningControl("Arc Y-Axis Limit", "The physical ceiling of the triangular wave driving the vertical translation arc.", arcYOffsetDp, 75f, { arcYOffsetDp = it }, 0f..250f, { "${it.toInt()} dp" }, emptyBackdrop(), contentColor, secondaryColor)
                 }
 
                 // GLASS RENDERING SECTION
@@ -261,18 +258,18 @@ fun DropdownMenuContent() {
 
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         BasicText("Glass Effect", style = TextStyle(contentColor, 14.sp))
-                        LiquidToggle(selected = { isGlassEnabled }, onSelect = { isGlassEnabled = it }, backdrop = controlsBackdrop)
+                        LiquidToggle(selected = { isGlassEnabled }, onSelect = { isGlassEnabled = it }, backdrop = emptyBackdrop())
                     }
 
                     if (isGlassEnabled) {
-                        TuningControl("Corner Radius", null, cornerRadiusDp, 24f, { cornerRadiusDp = it }, 0f..64f, { "${it.toInt()} dp" }, controlsBackdrop, contentColor, secondaryColor)
-                        TuningControl("Blur Radius", null, blurRadiusDp, 10f, { blurRadiusDp = it }, 0f..32f, { "${it.toInt()} dp" }, controlsBackdrop, contentColor, secondaryColor)
-                        TuningControl("Refraction Height", null, refractionHeightDp, 16f, { refractionHeightDp = it }, 0f..48f, { "${it.toInt()} dp" }, controlsBackdrop, contentColor, secondaryColor)
-                        TuningControl("Refraction Amount", null, refractionAmountDp, 20f, { refractionAmountDp = it }, 0f..64f, { "${it.toInt()} dp" }, controlsBackdrop, contentColor, secondaryColor)
+                        TuningControl("Corner Radius", null, cornerRadiusDp, 20f, { cornerRadiusDp = it }, 0f..64f, { "${it.toInt()} dp" }, emptyBackdrop(), contentColor, secondaryColor)
+                        TuningControl("Blur Radius", null, blurRadiusDp, 10f, { blurRadiusDp = it }, 0f..32f, { "${it.toInt()} dp" }, emptyBackdrop(), contentColor, secondaryColor)
+                        TuningControl("Refraction Height", null, refractionHeightDp, 16f, { refractionHeightDp = it }, 0f..48f, { "${it.toInt()} dp" }, emptyBackdrop(), contentColor, secondaryColor)
+                        TuningControl("Refraction Amount", null, refractionAmountDp, 20f, { refractionAmountDp = it }, 0f..64f, { "${it.toInt()} dp" }, emptyBackdrop(), contentColor, secondaryColor)
                         
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                             BasicText("Chromatic Aberration", style = TextStyle(contentColor, 14.sp))
-                            LiquidToggle(selected = { chromaticAberration }, onSelect = { chromaticAberration = it }, backdrop = controlsBackdrop)
+                            LiquidToggle(selected = { chromaticAberration }, onSelect = { chromaticAberration = it }, backdrop = emptyBackdrop())
                         }
                     }
                 }
@@ -443,7 +440,7 @@ private fun StandardGlassDropdownMenu(
             content = {
                 Column(
                     modifier = Modifier.width(IntrinsicSize.Max).onSizeChanged { if (it.width > 0 && it.height > 0) contentMeasuredSize = it.toSize() }.padding(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     content(globalTouchPosition, closeMenu, hoveredIndex, setHovered)
                 }
@@ -495,11 +492,14 @@ private fun StandardGlassEffectContainer(
                 val widthDiff = (contentSize.width - labelSize.width).coerceAtLeast(0f)
                 val heightDiff = (contentSize.height - labelSize.height).coerceAtLeast(0f)
 
-                val widthProgress = if (p > 1f) 1f + (p - 1f) * containerBulgeMultiplier else (p * p)
-                val heightProgress = if (p > 1f) 1f + (p - 1f) * containerBulgeMultiplier else sin(p * (PI / 2f)).toFloat()
+                // CRASH FIX: Clamp the layout physics so undershoot does not invert physical dimensions
+                val safeP = p.coerceAtLeast(0f)
+                val widthProgress = if (safeP > 1f) 1f + (safeP - 1f) * containerBulgeMultiplier else (safeP * safeP)
+                val heightProgress = if (safeP > 1f) 1f + (safeP - 1f) * containerBulgeMultiplier else sin(safeP * (PI / 2f)).toFloat()
 
-                val currentWidthPx = labelSize.width + widthDiff * widthProgress
-                val currentHeightPx = labelSize.height + heightDiff * heightProgress
+                // Final safety clamp guarantees dimensions stay purely positive
+                val currentWidthPx = (labelSize.width + widthDiff * widthProgress).coerceAtLeast(0f)
+                val currentHeightPx = (labelSize.height + heightDiff * heightProgress).coerceAtLeast(0f)
 
                 val placeable = measurable.measure(
                     constraints.copy(
@@ -513,8 +513,8 @@ private fun StandardGlassEffectContainer(
             }
             .graphicsLayer {
                 val progress = animatableProgress.value
-                val blurProgress = if (progress > 0.5f) (1f - progress) / 0.5f else progress / 0.5f
-                val squishScale = 1f - (blurProgress.coerceIn(0f, 1f) * 0.05f)
+                val blurProgress = if (progress > 0.5f) ((1f - progress) / 0.5f).coerceAtLeast(0f) else (progress / 0.5f).coerceAtLeast(0f)
+                val squishScale = 1f - (blurProgress * 0.05f)
 
                 val maxOffsetPx = with(density) { arcYOffsetDp.dp.toPx() }
                 val offsetY = alignment.calculateOffsetY(blurProgress, maxOffsetPx)
@@ -552,26 +552,49 @@ private fun StandardGlassEffectContainer(
                 shape = { RoundedCornerShape(cornerRadius) },
                 effects = {
                     val progress = animatableProgress.value
-                    if (isGlassEnabled) {
-                        val blurProgress = if (progress > 0.5f) (1f - progress) / 0.5f else progress / 0.5f
+                    // Container Opacity creates the "appearing out of nothing" illusion
+                    val containerOpacity = (progress / 0.1f).coerceIn(0f, 1f)
+                    
+                    if (isGlassEnabled && containerOpacity > 0f) {
+                        val blurProgress = if (progress > 0.5f) ((1f - progress) / 0.5f).coerceAtLeast(0f) else (progress / 0.5f).coerceAtLeast(0f)
                         val motionBlur = motionBlurAmount * sin(progress.coerceIn(0f, 1f) * PI).toFloat()
                         vibrancy()
-                        blur((2f + blurRadius * blurProgress.coerceIn(0f, 1f) + motionBlur).dp.toPx())
-                        lens(refractionHeight.dp.toPx(), refractionAmount.dp.toPx(), depthEffect = true, chromaticAberration = chromaticAberration)
+                        blur((blurRadius * containerOpacity).dp.toPx() + (motionBlur * blurProgress).dp.toPx())
+                        lens(
+                            refractionHeight.dp.toPx() * containerOpacity,
+                            refractionAmount.dp.toPx() * containerOpacity,
+                            depthEffect = true,
+                            chromaticAberration = chromaticAberration
+                        )
                     }
                 },
-                highlight = { if (isGlassEnabled) Highlight.Default.copy(alpha = 0.65f) else null },
-                shadow = { Shadow(radius = 18.dp, color = Color.Black.copy(alpha = 0.12f)) },
-                innerShadow = { if (isGlassEnabled) InnerShadow(radius = 10.dp, color = Color.White.copy(alpha = 0.25f)) else null },
+                highlight = { 
+                    val containerOpacity = (animatableProgress.value / 0.1f).coerceIn(0f, 1f)
+                    if (isGlassEnabled && containerOpacity > 0f) Highlight.Default.copy(alpha = 0.65f * containerOpacity) else null 
+                },
+                shadow = { 
+                    val containerOpacity = (animatableProgress.value / 0.1f).coerceIn(0f, 1f)
+                    Shadow(radius = 18.dp, color = Color.Black.copy(alpha = 0.12f * containerOpacity)) 
+                },
+                innerShadow = { 
+                    val containerOpacity = (animatableProgress.value / 0.1f).coerceIn(0f, 1f)
+                    if (isGlassEnabled && containerOpacity > 0f) InnerShadow(radius = 10.dp, color = Color.White.copy(alpha = 0.25f * containerOpacity)) else null 
+                },
                 onDrawSurface = {
                     val progress = animatableProgress.value
+                    val containerOpacity = (progress / 0.1f).coerceIn(0f, 1f)
                     val cr = cornerRadius.toPx()
-                    drawRoundRect(
-                        color = if (isLightTheme) Color.White.copy(alpha = 0.28f + 0.12f * progress) else Color(0xFF1E1E1E).copy(alpha = 0.35f + 0.15f * progress),
-                        cornerRadius = CornerRadius(cr, cr)
-                    )
+                    
+                    if (containerOpacity > 0f) {
+                        val baseAlpha = if (isLightTheme) 0.28f + 0.12f * progress else 0.35f + 0.15f * progress
+                        drawRoundRect(
+                            color = if (isLightTheme) Color.White.copy(alpha = baseAlpha * containerOpacity) else Color(0xFF1E1E1E).copy(alpha = baseAlpha * containerOpacity),
+                            cornerRadius = CornerRadius(cr, cr)
+                        )
+                    }
+                    
                     if (progress == 0f && buttonPressProgress > 0f) {
-                        drawRoundRect(color = Color.White.copy(alpha = 0.15f * buttonPressProgress), cornerRadius = CornerRadius(cr, cr), blendMode = BlendMode.Plus)
+                        drawRoundRect(color = Color.White.copy(alpha = 0.1f * buttonPressProgress), cornerRadius = CornerRadius(cr, cr), blendMode = BlendMode.Plus)
                     }
                 }
             )
@@ -636,9 +659,9 @@ private fun DropdownItemRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        BasicText(title, style = TextStyle(contentColor, 15.sp, FontWeight.Medium))
+        BasicText(title, style = TextStyle(contentColor, 16.sp, FontWeight.Medium))
         if (isSelected) {
-            BasicText("✓", style = TextStyle(Color(0xFF0088FF), 15.sp, FontWeight.Bold))
+            BasicText("✓", style = TextStyle(Color(0xFF0088FF), 16.sp, FontWeight.Bold))
         }
     }
 }

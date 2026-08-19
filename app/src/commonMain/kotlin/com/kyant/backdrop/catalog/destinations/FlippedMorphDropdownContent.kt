@@ -75,6 +75,7 @@ import androidx.compose.ui.unit.toSize
 import androidx.compose.ui.util.fastCoerceAtMost
 import androidx.compose.ui.util.lerp
 import com.kyant.backdrop.Backdrop
+import com.kyant.backdrop.backdrops.emptyBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.kyant.backdrop.catalog.BackdropDemoScaffold
 import com.kyant.backdrop.catalog.ReceiveIcon
@@ -147,9 +148,7 @@ fun FlippedMorphDropdownContent() {
     val animatableProgress = remember { Animatable(0f) }
 
     BackdropDemoScaffold { backdrop ->
-        val controlsBackdrop = rememberLayerBackdrop()
-
-        Column(modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 16.dp)) {
+                Column(modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 16.dp)) {
             BasicText("Flipped Morph Dropdown", Modifier.padding(top = 16.dp, bottom = 4.dp), style = TextStyle(contentColor, 26.sp, FontWeight.SemiBold))
             BasicText("Preview", style = TextStyle(Color(0xFF0088FF), 15.sp, FontWeight.Medium))
 
@@ -205,7 +204,7 @@ fun FlippedMorphDropdownContent() {
 
             Spacer(Modifier.height(16.dp))
             Column(
-                modifier = Modifier.fillMaxWidth().weight(1f).padding(bottom = 16.dp).clip(RoundedCornerShape(24.dp)).drawBackdrop(backdrop = backdrop, shape = { RoundedCornerShape(24.dp) }, effects = { vibrancy(); blur(8.dp.toPx()); lens(16.dp.toPx(), 32.dp.toPx()) }, highlight = { Highlight.Plain }, exportedBackdrop = controlsBackdrop, onDrawSurface = { drawRect(cardBackground) }).verticalScroll(rememberScrollState()).padding(20.dp),
+                modifier = Modifier.fillMaxWidth().weight(1f).padding(bottom = 16.dp).clip(RoundedCornerShape(24.dp)).background(cardBackground).verticalScroll(rememberScrollState()).padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
                 // CORE PROPERTIES SECTION
@@ -216,7 +215,7 @@ fun FlippedMorphDropdownContent() {
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             BasicText("Progress", style = TextStyle(contentColor, 14.sp)); BasicText("${(animatableProgress.value * 100).toInt()}%", style = TextStyle(secondaryColor, 14.sp))
                         }
-                        LiquidSlider(value = { animatableProgress.value }, onValueChange = { animationScope.launch { animatableProgress.snapTo(it) } }, valueRange = 0f..1f, visibilityThreshold = 0.001f, backdrop = controlsBackdrop)
+                        LiquidSlider(value = { animatableProgress.value }, onValueChange = { animationScope.launch { animatableProgress.snapTo(it) } }, valueRange = 0f..1f, visibilityThreshold = 0.001f, backdrop = emptyBackdrop())
                     }
 
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -224,7 +223,7 @@ fun FlippedMorphDropdownContent() {
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             MenuAlignment.entries.forEach { align ->
                                 val isSelected = selectedAlignment == align
-                                LiquidButton(onClick = { selectedAlignment = align }, backdrop = controlsBackdrop, modifier = Modifier.weight(1f).height(40.dp), tint = if (isSelected) Color(0xFF0088FF) else Color.Unspecified, surfaceColor = if (isSelected) Color.Unspecified else Color.White.copy(0.15f)) {
+                                LiquidButton(onClick = { selectedAlignment = align }, backdrop = emptyBackdrop(), modifier = Modifier.weight(1f).height(40.dp), tint = if (isSelected) Color(0xFF0088FF) else Color.Unspecified, surfaceColor = if (isSelected) Color.Unspecified else Color.White.copy(0.15f)) {
                                     BasicText(align.label, style = TextStyle(if (isSelected) Color.White else contentColor, 12.sp, FontWeight.Medium))
                                 }
                             }
@@ -236,7 +235,7 @@ fun FlippedMorphDropdownContent() {
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             MenuAnimationPreset.entries.forEach { preset ->
                                 val isSelected = selectedPreset == preset
-                                LiquidButton(onClick = { selectedPreset = preset; val target = if (animatableProgress.value > 0.5f) 0f else 1f; animationScope.launch { animatableProgress.animateTo(target, preset.getSpec(isClosing = target == 0f, speedMultiplier = animationSpeedMultiplier)) } }, backdrop = controlsBackdrop, modifier = Modifier.weight(1f).height(42.dp), tint = if (isSelected) Color(0xFF0088FF) else Color.Unspecified, surfaceColor = if (isSelected) Color.Unspecified else Color.White.copy(0.15f)) {
+                                LiquidButton(onClick = { selectedPreset = preset; val target = if (animatableProgress.value > 0.5f) 0f else 1f; animationScope.launch { animatableProgress.animateTo(target, preset.getSpec(isClosing = target == 0f, speedMultiplier = animationSpeedMultiplier)) } }, backdrop = emptyBackdrop(), modifier = Modifier.weight(1f).height(42.dp), tint = if (isSelected) Color(0xFF0088FF) else Color.Unspecified, surfaceColor = if (isSelected) Color.Unspecified else Color.White.copy(0.15f)) {
                                     BasicText(preset.label, style = TextStyle(if (isSelected) Color.White else contentColor, 13.sp, FontWeight.Medium))
                                 }
                             }
@@ -245,7 +244,7 @@ fun FlippedMorphDropdownContent() {
 
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         BasicText("Haptic Feedback", style = TextStyle(contentColor, 14.sp))
-                        LiquidToggle(selected = { isHapticsEnabled }, onSelect = { isHapticsEnabled = it }, backdrop = controlsBackdrop)
+                        LiquidToggle(selected = { isHapticsEnabled }, onSelect = { isHapticsEnabled = it }, backdrop = emptyBackdrop())
                     }
                 }
 
@@ -253,33 +252,33 @@ fun FlippedMorphDropdownContent() {
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     BasicText("Layout Translation", style = TextStyle(contentColor, 18.sp, FontWeight.SemiBold))
 
-                    TuningControl("Horizontal Offset", "Static layout shift.", horizontalOffsetDp, 0f, { horizontalOffsetDp = it }, -150f..150f, { "${it.toInt()} dp" }, controlsBackdrop, contentColor, secondaryColor)
-                    TuningControl("Vertical Offset", "Static layout shift.", verticalOffsetDp, 0f, { verticalOffsetDp = it }, -150f..150f, { "${it.toInt()} dp" }, controlsBackdrop, contentColor, secondaryColor)
+                    TuningControl("Horizontal Offset", "Static layout shift.", horizontalOffsetDp, 0f, { horizontalOffsetDp = it }, -150f..150f, { "${it.toInt()} dp" }, emptyBackdrop(), contentColor, secondaryColor)
+                    TuningControl("Vertical Offset", "Static layout shift.", verticalOffsetDp, 0f, { verticalOffsetDp = it }, -150f..150f, { "${it.toInt()} dp" }, emptyBackdrop(), contentColor, secondaryColor)
                 }
 
                 // 3D FLIP TUNING SECTION
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     BasicText("3D Flip Mechanics", style = TextStyle(contentColor, 18.sp, FontWeight.SemiBold))
                     
-                    TuningControl("Flip Axis X", "Vertical rotation magnitude in degrees.", flipDegreesX, 180f, { flipDegreesX = it }, -360f..360f, { "${it.toInt()}°" }, controlsBackdrop, contentColor, secondaryColor)
-                    TuningControl("Flip Axis Y", "Horizontal rotation magnitude in degrees.", flipDegreesY, 0f, { flipDegreesY = it }, -360f..360f, { "${it.toInt()}°" }, controlsBackdrop, contentColor, secondaryColor)
-                    TuningControl("Camera Distance", "Controls perspective distortion. Higher values flatten the 3D effect.", flipCameraDistance, 32f, { flipCameraDistance = it }, 1f..100f, { String.format("%.1f", it) }, controlsBackdrop, contentColor, secondaryColor)
-                    TuningControl("Flip Depth Scale", "Amount the card shrinks into the Z-axis during flip to add 3D clearance.", flipDepthScale, 0.1f, { flipDepthScale = it }, 0f..0.5f, { String.format("%.3f", it) }, controlsBackdrop, contentColor, secondaryColor)
-                    TuningControl("Flip Overshoot Dampener", "Friction applied specifically to 3D rotation during spring overshoot.", flipOvershootMultiplier, 0.5f, { flipOvershootMultiplier = it }, 0f..1f, { String.format("%.3f", it) }, controlsBackdrop, contentColor, secondaryColor)
+                    TuningControl("Flip Axis X", "Vertical rotation magnitude in degrees.", flipDegreesX, 180f, { flipDegreesX = it }, -360f..360f, { "${it.toInt()}°" }, emptyBackdrop(), contentColor, secondaryColor)
+                    TuningControl("Flip Axis Y", "Horizontal rotation magnitude in degrees.", flipDegreesY, 0f, { flipDegreesY = it }, -360f..360f, { "${it.toInt()}°" }, emptyBackdrop(), contentColor, secondaryColor)
+                    TuningControl("Camera Distance", "Controls perspective distortion. Higher values flatten the 3D effect.", flipCameraDistance, 32f, { flipCameraDistance = it }, 1f..100f, { String.format("%.1f", it) }, emptyBackdrop(), contentColor, secondaryColor)
+                    TuningControl("Flip Depth Scale", "Amount the card shrinks into the Z-axis during flip to add 3D clearance.", flipDepthScale, 0.1f, { flipDepthScale = it }, 0f..0.5f, { String.format("%.3f", it) }, emptyBackdrop(), contentColor, secondaryColor)
+                    TuningControl("Flip Overshoot Dampener", "Friction applied specifically to 3D rotation during spring overshoot.", flipOvershootMultiplier, 0.5f, { flipOvershootMultiplier = it }, 0f..1f, { String.format("%.3f", it) }, emptyBackdrop(), contentColor, secondaryColor)
                 }
 
                 // ADVANCED PHYSICS TUNING SECTION
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     BasicText("Advanced Physics Tuning", style = TextStyle(contentColor, 18.sp, FontWeight.SemiBold))
 
-                    TuningControl("Animation Speed", "Multiplies the entire spring natural frequency & tween duration.", animationSpeedMultiplier, 1f, { animationSpeedMultiplier = it }, 0.1f..4f, { "${String.format("%.2f", it)}x" }, controlsBackdrop, contentColor, secondaryColor)
-                    TuningControl("Container Bulge Ratio", "Friction dampener for physical bounds expansion during spring overshoot.", containerBulgeMultiplier, 0.395f, { containerBulgeMultiplier = it }, 0f..1f, { String.format("%.3f", it) }, controlsBackdrop, contentColor, secondaryColor)
-                    TuningControl("Inner Content Bulge Ratio", "Friction dampener applied to inner text scaling during overshoot.", contentBulgeMultiplier, 0.15f, { contentBulgeMultiplier = it }, 0f..1f, { String.format("%.3f", it) }, controlsBackdrop, contentColor, secondaryColor)
-                    TuningControl("Content Pop X Amplitude", "Horizontal absolute scale addition during the animation sine wave.", contentPopX, 0.03f, { contentPopX = it }, 0f..0.2f, { String.format("%.3f", it) }, controlsBackdrop, contentColor, secondaryColor)
-                    TuningControl("Content Pop Y Amplitude", "Vertical absolute scale addition during the animation sine wave.", contentPopY, 0.01f, { contentPopY = it }, 0f..0.2f, { String.format("%.3f", it) }, controlsBackdrop, contentColor, secondaryColor)
-                    TuningControl("Drag Jelly Tension", "The hyperbolic tangent derivative controlling fluid squish resistance.", dragJellyTension, 0.05f, { dragJellyTension = it }, 0.01f..0.2f, { String.format("%.3f", it) }, controlsBackdrop, contentColor, secondaryColor)
-                    TuningControl("Motion Blur Peak", "Maximum directional blur generated at highest velocity points.", motionBlurAmount, 25f, { motionBlurAmount = it }, 0f..80f, { "${it.toInt()} dp" }, controlsBackdrop, contentColor, secondaryColor)
-                    TuningControl("Arc Y-Axis Limit", "The physical ceiling of the triangular wave driving vertical arcs.", arcYOffsetDp, 75f, { arcYOffsetDp = it }, 0f..250f, { "${it.toInt()} dp" }, controlsBackdrop, contentColor, secondaryColor)
+                    TuningControl("Animation Speed", "Multiplies the entire spring natural frequency & tween duration.", animationSpeedMultiplier, 1f, { animationSpeedMultiplier = it }, 0.1f..4f, { "${String.format("%.2f", it)}x" }, emptyBackdrop(), contentColor, secondaryColor)
+                    TuningControl("Container Bulge Ratio", "Friction dampener for physical bounds expansion during spring overshoot.", containerBulgeMultiplier, 0.395f, { containerBulgeMultiplier = it }, 0f..1f, { String.format("%.3f", it) }, emptyBackdrop(), contentColor, secondaryColor)
+                    TuningControl("Inner Content Bulge Ratio", "Friction dampener applied to inner text scaling during overshoot.", contentBulgeMultiplier, 0.15f, { contentBulgeMultiplier = it }, 0f..1f, { String.format("%.3f", it) }, emptyBackdrop(), contentColor, secondaryColor)
+                    TuningControl("Content Pop X Amplitude", "Horizontal absolute scale addition during the animation sine wave.", contentPopX, 0.03f, { contentPopX = it }, 0f..0.2f, { String.format("%.3f", it) }, emptyBackdrop(), contentColor, secondaryColor)
+                    TuningControl("Content Pop Y Amplitude", "Vertical absolute scale addition during the animation sine wave.", contentPopY, 0.01f, { contentPopY = it }, 0f..0.2f, { String.format("%.3f", it) }, emptyBackdrop(), contentColor, secondaryColor)
+                    TuningControl("Drag Jelly Tension", "The hyperbolic tangent derivative controlling fluid squish resistance.", dragJellyTension, 0.05f, { dragJellyTension = it }, 0.01f..0.2f, { String.format("%.3f", it) }, emptyBackdrop(), contentColor, secondaryColor)
+                    TuningControl("Motion Blur Peak", "Maximum directional blur generated at highest velocity points.", motionBlurAmount, 25f, { motionBlurAmount = it }, 0f..80f, { "${it.toInt()} dp" }, emptyBackdrop(), contentColor, secondaryColor)
+                    TuningControl("Arc Y-Axis Limit", "The physical ceiling of the triangular wave driving vertical arcs.", arcYOffsetDp, 75f, { arcYOffsetDp = it }, 0f..250f, { "${it.toInt()} dp" }, emptyBackdrop(), contentColor, secondaryColor)
                 }
 
                 // GLASS RENDERING SECTION
@@ -288,18 +287,18 @@ fun FlippedMorphDropdownContent() {
 
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         BasicText("Glass Effect", style = TextStyle(contentColor, 14.sp))
-                        LiquidToggle(selected = { isGlassEnabled }, onSelect = { isGlassEnabled = it }, backdrop = controlsBackdrop)
+                        LiquidToggle(selected = { isGlassEnabled }, onSelect = { isGlassEnabled = it }, backdrop = emptyBackdrop())
                     }
 
                     if (isGlassEnabled) {
-                        TuningControl("Corner Radius", null, cornerRadiusDp, 30f, { cornerRadiusDp = it }, 0f..64f, { "${it.toInt()} dp" }, controlsBackdrop, contentColor, secondaryColor)
-                        TuningControl("Blur Radius", null, blurRadiusDp, 10f, { blurRadiusDp = it }, 0f..32f, { "${it.toInt()} dp" }, controlsBackdrop, contentColor, secondaryColor)
-                        TuningControl("Refraction Height", null, refractionHeightDp, 16f, { refractionHeightDp = it }, 0f..48f, { "${it.toInt()} dp" }, controlsBackdrop, contentColor, secondaryColor)
-                        TuningControl("Refraction Amount", null, refractionAmountDp, 20f, { refractionAmountDp = it }, 0f..64f, { "${it.toInt()} dp" }, controlsBackdrop, contentColor, secondaryColor)
+                        TuningControl("Corner Radius", null, cornerRadiusDp, 30f, { cornerRadiusDp = it }, 0f..64f, { "${it.toInt()} dp" }, emptyBackdrop(), contentColor, secondaryColor)
+                        TuningControl("Blur Radius", null, blurRadiusDp, 10f, { blurRadiusDp = it }, 0f..32f, { "${it.toInt()} dp" }, emptyBackdrop(), contentColor, secondaryColor)
+                        TuningControl("Refraction Height", null, refractionHeightDp, 16f, { refractionHeightDp = it }, 0f..48f, { "${it.toInt()} dp" }, emptyBackdrop(), contentColor, secondaryColor)
+                        TuningControl("Refraction Amount", null, refractionAmountDp, 20f, { refractionAmountDp = it }, 0f..64f, { "${it.toInt()} dp" }, emptyBackdrop(), contentColor, secondaryColor)
                         
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                             BasicText("Chromatic Aberration", style = TextStyle(contentColor, 14.sp))
-                            LiquidToggle(selected = { chromaticAberration }, onSelect = { chromaticAberration = it }, backdrop = controlsBackdrop)
+                            LiquidToggle(selected = { chromaticAberration }, onSelect = { chromaticAberration = it }, backdrop = emptyBackdrop())
                         }
                     }
                 }
