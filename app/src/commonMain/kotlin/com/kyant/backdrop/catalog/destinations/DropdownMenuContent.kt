@@ -488,7 +488,7 @@ fun GlassEffectContainer(
 
                 // Vertical Pill Morph (Height pops instantly, width follows softly)
                 val widthProgress = (p * p).coerceIn(0f, 1f)
-                val heightProgress = sin(p * (PI / 2f)).toFloat().coerceIn(0f, 1f)
+                val heightProgress = sin(p.coerceIn(0f, 1f) * (PI / 2f)).toFloat()
 
                 val currentWidthPx = labelSize.width + widthDiff * widthProgress
                 val currentHeightPx = labelSize.height + heightDiff * heightProgress
@@ -546,7 +546,7 @@ fun GlassEffectContainer(
                     val progress = animatableProgress.value
                     if (isGlassEnabled) {
                         val blurProgress = if (progress > 0.5f) (1f - progress) / 0.5f else progress / 0.5f
-                        val motionBlur = 25f * sin(progress * PI).toFloat()
+                        val motionBlur = 25f * sin(progress.coerceIn(0f, 1f) * PI).toFloat()
                         vibrancy()
                         blur((2f + blurRadius * blurProgress.coerceIn(0f, 1f) + motionBlur).dp.toPx())
                         lens(refractionHeight.dp.toPx(), refractionAmount.dp.toPx(), depthEffect = true, chromaticAberration = chromaticAberration)
@@ -580,7 +580,7 @@ fun GlassEffectContainer(
                     val baseScale = minAspectScale + (1f - minAspectScale) * contentProgress
                     
                     // iOS Squish stretching from the absolute center
-                    val pop = sin(progress * PI).toFloat()
+                    val pop = sin(progress.coerceIn(0f, 1f) * PI).toFloat()
                     
                     alpha = contentProgress
                     scaleX = baseScale + pop * 0.03f
