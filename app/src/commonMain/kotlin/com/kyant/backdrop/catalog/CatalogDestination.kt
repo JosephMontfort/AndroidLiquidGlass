@@ -18,4 +18,7 @@ enum class CatalogDestination {
     ProgressiveBlur,
     ScrollContainer,
     LazyScrollContainer,
+    FluidLiquidMorph,
+    OpaqueFluidMorph,
+    OriginOSDropdown,
 }

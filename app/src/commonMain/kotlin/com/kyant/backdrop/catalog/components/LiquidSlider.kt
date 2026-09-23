@@ -135,7 +135,9 @@ fun LiquidSlider(
                     .height(6f.dp)
                     .layout { measurable, constraints ->
                         val placeable = measurable.measure(constraints)
-                        val width = (constraints.maxWidth * dampedDragAnimation.progress).fastRoundToInt()
+                        val width = (constraints.maxWidth * dampedDragAnimation.progress)
+                            .fastRoundToInt()
+                            .coerceIn(0, constraints.maxWidth)
                         layout(width, placeable.height) {
                             placeable.place(0, 0)
                         }

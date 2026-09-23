@@ -39,6 +39,9 @@ fun MainContent() {
             CatalogDestination.ProgressiveBlur -> ProgressiveBlurContent()
             CatalogDestination.ScrollContainer -> ScrollContainerContent()
             CatalogDestination.LazyScrollContainer -> LazyScrollContainerContent()
+            CatalogDestination.FluidLiquidMorph -> FluidLiquidMorphContent()
+            CatalogDestination.OpaqueFluidMorph -> OpaqueFluidMorphContent()
+            CatalogDestination.OriginOSDropdown -> OriginOSDropdownContent()
         }
 
         BackHandler(destination != CatalogDestination.Home) {

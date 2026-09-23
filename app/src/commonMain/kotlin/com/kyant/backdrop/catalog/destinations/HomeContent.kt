@@ -54,6 +54,9 @@ fun HomeContent(onNavigate: (CatalogDestination) -> Unit) {
             Subtitle("System UIs")
             ListItem({ onNavigate(CatalogDestination.LockScreen) }, "Lock screen (SDF texture)")
             ListItem({ onNavigate(CatalogDestination.ControlCenter) }, "Control center")
+            ListItem({ onNavigate(CatalogDestination.OriginOSDropdown) }, "OriginOS 7 Dropdown Menu (1:1 Fluid Morph)")
+            ListItem({ onNavigate(CatalogDestination.FluidLiquidMorph) }, "iOS Fluid Liquid Morph (1:1)")
+            ListItem({ onNavigate(CatalogDestination.OpaqueFluidMorph) }, "iOS Opaque Fluid Morph (1:1) - New")
             ListItem({ onNavigate(CatalogDestination.Magnifier) }, "Magnifier")
 
             Subtitle("Experiments")
