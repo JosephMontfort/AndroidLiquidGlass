@@ -466,15 +466,19 @@ fun OriginOSDropdownContent() {
                                     style = TextStyle(textSecondary, 11.sp, FontWeight.Bold)
                                 )
                                 BasicText(
-                                    text = "• 26 Checkpoints: Frame-by-frame trajectory from OriginOS 7 decompilation",
+                                    text = "• 26 Checkpoints: Frame-by-frame dual trajectory measured from OriginOS 7",
                                     style = TextStyle(textPrimary, 11.sp, fontFamily = FontFamily.Monospace)
                                 )
                                 BasicText(
-                                    text = "• Top-Right Corner: Inward necking (ΔX=-20dp, ΔY=+12dp) ➔ Convex dome ➔ Squircle settling",
+                                    text = "• Plunging Top Edge: Top-left & top-right corners drop +28dp..+29.5dp with +14dp dip",
                                     style = TextStyle(textPrimary, 11.sp, fontFamily = FontFamily.Monospace)
                                 )
                                 BasicText(
-                                    text = "• Organic Flanks: Left concave waist (28dp) + Right waist (14dp) + Droplet sag (18dp)",
+                                    text = "• Rising Dome Arch: Upper boundary rebounds into -15dp expansive dome before squircle settling",
+                                    style = TextStyle(textPrimary, 11.sp, fontFamily = FontFamily.Monospace)
+                                )
+                                BasicText(
+                                    text = "• Organic Contour: Droplet sag (+22dp), left waist (20dp) & bell belly bulge (18dp)",
                                     style = TextStyle(textPrimary, 11.sp, fontFamily = FontFamily.Monospace)
                                 )
                                 BasicText(

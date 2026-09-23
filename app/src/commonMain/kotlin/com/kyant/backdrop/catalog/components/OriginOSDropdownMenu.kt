@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicText
@@ -46,7 +47,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Density
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -62,66 +62,110 @@ import com.kyant.backdrop.shadow.InnerShadow
 import com.kyant.backdrop.shadow.Shadow
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlin.math.abs
 
 /**
- * OriginOS 7 26-Checkpoint Fluid Morph Model.
+ * OriginOS 7 Fluid Morph Checkpoint.
  *
- * Meticulously reconstructed from frame-by-frame analysis of the OriginOS 7 Gallery
- * dropdown animation (60 frames at 30fps).
+ * Meticulously reconstructed from frame-by-frame measurement of the original
+ * OriginOS 7 gallery dropdown video.
+ *
+ * Trajectory behaviors modeled:
+ * 1. Top Edge & Corners Plunge: Top-left and top-right corners drop down (+28dp..+29.5dp)
+ *    with a concave middle dip (+14dp) mid-flight, necking into a fluid vase.
+ * 2. Asymmetric Flanks: Left concave waist (20dp) + outward bell bulge (18dp) and
+ *    right neck (14dp).
+ * 3. Viscous Droplet Sag: Bottom edge sags downward (+22dp) under fluid momentum.
+ * 4. Convex Dome Arch: Top edge rebounds upward into a wide dome arch (-15dp).
+ * 5. Squircle Settling: Corners expand to 24dp, dome flattens, settling into 210x224dp card.
+ * 6. Asymmetrical Closing: Retracts via hanging droplet neck underneath the anchored pill.
  */
 data class OriginOSMorphCheckpoint(
     val progress: Float,
     val width: Float,
     val height: Float,
-    val trOffsetX: Float, // top-right corner X offset (negative = inward shift)
-    val trOffsetY: Float, // top-right corner Y offset (positive = downward shift)
-    val trRadius: Float,  // top-right corner radius
-    val tlRadius: Float,  // top-left corner radius
-    val blRadius: Float,  // bottom-left corner radius
-    val brRadius: Float,  // bottom-right corner radius
-    val leftWaist: Float, // concave neck indentation on left flank
-    val rightWaist: Float,// concave neck indentation on right flank
-    val topArch: Float,   // convex dome arch bulge upwards
-    val bottomSag: Float  // viscous droplet sag downwards
+    val trOffsetX: Float,
+    val trOffsetY: Float,
+    val trRadius: Float,
+    val tlOffsetX: Float,
+    val tlOffsetY: Float,
+    val tlRadius: Float,
+    val blRadius: Float,
+    val brRadius: Float,
+    val topEdgeDip: Float, // positive = downward dip, negative = upward dome arch
+    val bottomSag: Float,  // viscous droplet sag downwards
+    val leftWaist: Float,  // concave neck indentation on left flank
+    val leftBulge: Float,  // convex belly bulge on lower left flank
+    val rightWaist: Float  // concave neck indentation on right flank
 )
 
-val CHECKPOINTS_26 = listOf(
-    OriginOSMorphCheckpoint(0.000f, 132.00f, 44.00f, 0.00f, 0.00f, 22.00f, 22.00f, 22.00f, 22.00f, 0.00f, 0.00f, 0.00f, 0.00f),
-    OriginOSMorphCheckpoint(0.040f, 123.08f, 50.50f, -3.84f, 2.31f, 17.93f, 22.13f, 22.13f, 22.13f, 6.34f, 3.86f, 0.00f, 0.00f),
-    OriginOSMorphCheckpoint(0.080f, 120.07f, 60.65f, -7.54f, 4.53f, 14.57f, 22.27f, 22.27f, 22.27f, 12.35f, 7.42f, 0.00f, 3.07f),
-    OriginOSMorphCheckpoint(0.120f, 124.95f, 72.49f, -10.96f, 6.58f, 12.49f, 22.40f, 22.40f, 22.40f, 17.72f, 10.40f, 0.00f, 7.01f),
-    OriginOSMorphCheckpoint(0.160f, 125.03f, 85.28f, -13.97f, 8.38f, 12.05f, 22.53f, 22.53f, 22.53f, 22.17f, 12.58f, 0.94f, 10.58f),
-    OriginOSMorphCheckpoint(0.200f, 143.38f, 98.60f, -16.46f, 9.88f, 13.34f, 22.67f, 22.67f, 22.67f, 25.47f, 13.79f, 4.64f, 13.60f),
-    OriginOSMorphCheckpoint(0.240f, 159.01f, 112.13f, -18.34f, 11.00f, 16.12f, 22.80f, 22.80f, 22.80f, 27.44f, 13.92f, 8.04f, 15.92f),
-    OriginOSMorphCheckpoint(0.280f, 172.14f, 125.62f, -19.53f, 11.72f, 19.92f, 22.93f, 22.93f, 22.93f, 27.99f, 12.98f, 10.93f, 17.41f),
-    OriginOSMorphCheckpoint(0.320f, 183.00f, 138.89f, -19.99f, 12.00f, 16.94f, 23.07f, 23.07f, 23.07f, 27.08f, 11.03f, 13.14f, 17.99f),
-    OriginOSMorphCheckpoint(0.360f, 191.79f, 151.76f, -19.71f, 11.83f, 18.80f, 23.20f, 23.20f, 23.20f, 24.76f, 8.23f, 14.53f, 17.64f),
-    OriginOSMorphCheckpoint(0.400f, 198.75f, 164.08f, -18.70f, 11.22f, 20.59f, 23.33f, 23.33f, 23.33f, 21.16f, 4.79f, 15.00f, 16.37f),
-    OriginOSMorphCheckpoint(0.440f, 204.07f, 175.73f, -16.99f, 10.19f, 22.27f, 23.47f, 23.47f, 23.47f, 16.46f, 0.98f, 14.53f, 14.25f),
-    OriginOSMorphCheckpoint(0.480f, 207.98f, 186.60f, -14.65f, 8.79f, 23.79f, 23.60f, 23.60f, 23.60f, 10.90f, 0.00f, 13.14f, 11.39f),
-    OriginOSMorphCheckpoint(0.520f, 210.70f, 196.57f, -11.76f, 7.05f, 25.12f, 23.73f, 23.73f, 23.73f, 4.77f, 0.00f, 10.93f, 7.94f),
-    OriginOSMorphCheckpoint(0.560f, 212.45f, 205.56f, -8.43f, 5.06f, 26.23f, 23.87f, 23.87f, 23.87f, 0.00f, 0.00f, 8.04f, 4.08f),
-    OriginOSMorphCheckpoint(0.600f, 213.44f, 213.47f, -4.79f, 2.87f, 27.09f, 24.00f, 24.00f, 24.00f, 0.00f, 0.00f, 4.64f, 0.00f),
-    OriginOSMorphCheckpoint(0.640f, 213.88f, 220.22f, -0.97f, 0.58f, 27.67f, 24.00f, 24.00f, 24.00f, 0.00f, 0.00f, 0.94f, 0.00f),
-    OriginOSMorphCheckpoint(0.680f, 214.00f, 225.73f, 0.00f, 0.00f, 27.96f, 24.00f, 24.00f, 24.00f, 0.00f, 0.00f, 0.00f, 0.00f),
-    OriginOSMorphCheckpoint(0.720f, 213.58f, 227.58f, 0.00f, 0.00f, 27.73f, 24.00f, 24.00f, 24.00f, 0.00f, 0.00f, 0.00f, 0.00f),
-    OriginOSMorphCheckpoint(0.760f, 212.76f, 226.76f, 0.00f, 0.00f, 27.20f, 24.00f, 24.00f, 24.00f, 0.00f, 0.00f, 0.00f, 0.00f),
-    OriginOSMorphCheckpoint(0.800f, 212.00f, 226.00f, 0.00f, 0.00f, 26.67f, 24.00f, 24.00f, 24.00f, 0.00f, 0.00f, 0.00f, 0.00f),
-    OriginOSMorphCheckpoint(0.840f, 211.32f, 225.32f, 0.00f, 0.00f, 26.13f, 24.00f, 24.00f, 24.00f, 0.00f, 0.00f, 0.00f, 0.00f),
-    OriginOSMorphCheckpoint(0.880f, 210.76f, 224.76f, 0.00f, 0.00f, 25.60f, 24.00f, 24.00f, 24.00f, 0.00f, 0.00f, 0.00f, 0.00f),
-    OriginOSMorphCheckpoint(0.920f, 210.35f, 224.35f, 0.00f, 0.00f, 25.07f, 24.00f, 24.00f, 24.00f, 0.00f, 0.00f, 0.00f, 0.00f),
-    OriginOSMorphCheckpoint(0.960f, 210.09f, 224.09f, 0.00f, 0.00f, 24.53f, 24.00f, 24.00f, 24.00f, 0.00f, 0.00f, 0.00f, 0.00f),
-    OriginOSMorphCheckpoint(1.000f, 210.00f, 224.00f, 0.00f, 0.00f, 24.00f, 24.00f, 24.00f, 24.00f, 0.00f, 0.00f, 0.00f, 0.00f)
+val CHECKPOINTS_OPENING_26 = listOf(
+    OriginOSMorphCheckpoint(0.000f, 132.00f, 44.00f, 0.00f, 0.00f, 22.00f, 0.00f, 0.00f, 22.00f, 22.00f, 22.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f),
+    OriginOSMorphCheckpoint(0.040f, 127.20f, 58.28f, -0.48f, 0.70f, 21.87f, 0.38f, 0.67f, 21.88f, 22.30f, 22.30f, 3.86f, 0.98f, 0.89f, 0.80f, 0.62f),
+    OriginOSMorphCheckpoint(0.080f, 122.40f, 72.47f, -1.63f, 2.41f, 21.42f, 1.31f, 2.29f, 21.47f, 22.78f, 22.78f, 7.42f, 2.73f, 2.48f, 2.23f, 1.74f),
+    OriginOSMorphCheckpoint(0.120f, 124.92f, 86.49f, -3.31f, 4.88f, 20.75f, 2.65f, 4.63f, 20.83f, 23.36f, 23.36f, 10.40f, 4.91f, 4.47f, 4.02f, 3.13f),
+    OriginOSMorphCheckpoint(0.160f, 134.70f, 100.24f, -5.37f, 7.92f, 19.90f, 4.30f, 7.52f, 20.04f, 23.99f, 23.99f, 12.58f, 7.36f, 6.69f, 6.02f, 4.68f),
+    OriginOSMorphCheckpoint(0.200f, 144.33f, 113.65f, -7.68f, 11.33f, 18.94f, 6.15f, 10.76f, 19.13f, 24.65f, 24.65f, 13.79f, 9.91f, 9.01f, 8.11f, 6.31f),
+    OriginOSMorphCheckpoint(0.240f, 153.69f, 126.63f, -10.11f, 14.91f, 17.93f, 8.09f, 14.15f, 18.18f, 25.31f, 25.31f, 13.92f, 12.46f, 11.33f, 10.19f, 7.93f),
+    OriginOSMorphCheckpoint(0.280f, 162.68f, 139.09f, -12.51f, 18.45f, 16.93f, 10.01f, 17.51f, 17.24f, 25.94f, 25.94f, 12.98f, 14.88f, 13.53f, 12.17f, 9.47f),
+    OriginOSMorphCheckpoint(0.320f, 171.20f, 150.98f, -14.75f, 21.75f, 16.00f, 11.80f, 20.65f, 16.37f, 26.52f, 26.52f, 11.03f, 17.07f, 15.52f, 13.96f, 10.86f),
+    OriginOSMorphCheckpoint(0.360f, 179.16f, 162.20f, -16.71f, 24.64f, 15.20f, 13.36f, 23.39f, 15.62f, 27.02f, 27.02f, 8.23f, 18.94f, 17.21f, 15.49f, 12.05f),
+    OriginOSMorphCheckpoint(0.400f, 186.47f, 172.69f, -18.27f, 26.95f, 14.58f, 14.62f, 25.58f, 15.03f, 27.44f, 27.44f, 4.79f, 20.40f, 18.55f, 16.69f, 12.98f),
+    OriginOSMorphCheckpoint(0.440f, 193.05f, 182.39f, -19.37f, 28.57f, 14.16f, 15.49f, 27.11f, 14.65f, 27.75f, 27.75f, 0.98f, 21.42f, 19.47f, 17.52f, 13.63f),
+    OriginOSMorphCheckpoint(0.480f, 198.84f, 191.24f, -19.93f, 29.40f, 13.99f, 15.94f, 27.90f, 14.49f, 27.95f, 27.95f, -2.56f, 21.93f, 19.94f, 17.95f, 13.96f),
+    OriginOSMorphCheckpoint(0.520f, 203.75f, 199.18f, -19.93f, 29.40f, 14.07f, 15.94f, 27.90f, 14.57f, 28.03f, 28.03f, -5.84f, 21.93f, 19.94f, 17.95f, 13.96f),
+    OriginOSMorphCheckpoint(0.560f, 207.76f, 206.16f, -19.37f, 28.57f, 14.40f, 15.49f, 27.11f, 14.89f, 27.99f, 27.99f, -8.82f, 21.42f, 19.47f, 17.52f, 13.63f),
+    OriginOSMorphCheckpoint(0.600f, 210.80f, 212.15f, -18.27f, 26.95f, 14.98f, 14.62f, 25.58f, 15.43f, 27.84f, 27.84f, -11.34f, 20.40f, 18.55f, 16.69f, 12.98f),
+    OriginOSMorphCheckpoint(0.640f, 212.84f, 217.09f, -16.71f, 24.64f, 15.76f, 13.36f, 23.39f, 16.18f, 27.58f, 27.58f, -13.27f, 18.94f, 17.21f, 15.49f, 12.05f),
+    OriginOSMorphCheckpoint(0.680f, 213.87f, 220.97f, -14.75f, 21.75f, 16.72f, 11.80f, 20.65f, 17.09f, 27.24f, 27.24f, -14.51f, 17.07f, 15.52f, 13.96f, 10.86f),
+    OriginOSMorphCheckpoint(0.720f, 213.73f, 223.76f, -12.51f, 18.45f, 17.81f, 10.01f, 17.51f, 18.12f, 26.82f, 26.82f, -14.99f, 14.88f, 13.53f, 12.17f, 9.47f),
+    OriginOSMorphCheckpoint(0.760f, 213.20f, 225.44f, -10.11f, 14.91f, 18.97f, 8.09f, 14.15f, 19.22f, 26.35f, 26.35f, -14.70f, 12.46f, 11.33f, 10.19f, 7.93f),
+    OriginOSMorphCheckpoint(0.800f, 212.67f, 226.00f, -7.68f, 11.33f, 20.14f, 6.15f, 10.76f, 20.33f, 25.85f, 25.85f, -13.64f, 9.91f, 9.01f, 8.11f, 6.31f),
+    OriginOSMorphCheckpoint(0.840f, 212.13f, 225.60f, -5.37f, 7.92f, 21.26f, 4.30f, 7.52f, 21.40f, 25.35f, 25.35f, -11.88f, 7.36f, 6.69f, 6.02f, 4.68f),
+    OriginOSMorphCheckpoint(0.880f, 211.60f, 225.20f, -3.31f, 4.88f, 22.27f, 2.65f, 4.63f, 22.35f, 24.88f, 24.88f, -9.50f, 4.91f, 4.47f, 4.02f, 3.13f),
+    OriginOSMorphCheckpoint(0.920f, 211.07f, 224.80f, -1.63f, 2.41f, 23.10f, 1.31f, 2.29f, 23.15f, 24.46f, 24.46f, -6.62f, 2.73f, 2.48f, 2.23f, 1.74f),
+    OriginOSMorphCheckpoint(0.960f, 210.53f, 224.40f, -0.48f, 0.70f, 23.71f, 0.38f, 0.67f, 23.72f, 24.14f, 24.14f, -3.40f, 0.98f, 0.89f, 0.80f, 0.62f),
+    OriginOSMorphCheckpoint(1.000f, 210.00f, 224.00f, 0.00f, 0.00f, 24.00f, 0.00f, 0.00f, 24.00f, 24.00f, 24.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f)
 )
 
-fun interpolateCheckpoint(p: Float): OriginOSMorphCheckpoint {
+val CHECKPOINTS_CLOSING_26 = listOf(
+    OriginOSMorphCheckpoint(0.000f, 132.00f, 44.00f, 0.00f, 0.00f, 22.00f, 0.00f, 0.00f, 22.00f, 22.00f, 22.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f),
+    OriginOSMorphCheckpoint(0.040f, 133.19f, 45.04f, -0.14f, 0.11f, 22.08f, 0.10f, 0.10f, 22.08f, 22.18f, 22.18f, 0.05f, 0.62f, 0.43f, 0.29f, 0.33f),
+    OriginOSMorphCheckpoint(0.080f, 134.92f, 47.16f, -0.49f, 0.37f, 22.16f, 0.33f, 0.33f, 22.16f, 22.49f, 22.49f, 0.16f, 2.12f, 1.47f, 0.98f, 1.14f),
+    OriginOSMorphCheckpoint(0.120f, 136.95f, 50.05f, -0.99f, 0.74f, 22.24f, 0.66f, 0.66f, 22.24f, 22.90f, 22.90f, 0.33f, 4.30f, 2.98f, 1.99f, 2.32f),
+    OriginOSMorphCheckpoint(0.160f, 139.20f, 53.59f, -1.61f, 1.21f, 22.32f, 1.07f, 1.07f, 22.32f, 23.39f, 23.39f, 0.54f, 6.98f, 4.83f, 3.22f, 3.76f),
+    OriginOSMorphCheckpoint(0.200f, 141.63f, 57.71f, -2.31f, 1.73f, 22.40f, 1.54f, 1.54f, 22.40f, 23.94f, 23.94f, 0.77f, 9.99f, 6.92f, 4.61f, 5.38f),
+    OriginOSMorphCheckpoint(0.240f, 144.20f, 62.35f, -3.03f, 2.27f, 22.48f, 2.02f, 2.02f, 22.48f, 24.50f, 24.50f, 1.01f, 13.14f, 9.10f, 6.07f, 7.08f),
+    OriginOSMorphCheckpoint(0.280f, 146.91f, 67.48f, -3.75f, 2.81f, 22.56f, 2.50f, 2.50f, 22.56f, 25.06f, 25.06f, 1.25f, 16.26f, 11.26f, 7.51f, 8.76f),
+    OriginOSMorphCheckpoint(0.320f, 149.73f, 73.07f, -4.42f, 3.32f, 22.64f, 2.95f, 2.95f, 22.64f, 25.59f, 25.59f, 1.47f, 19.17f, 13.27f, 8.85f, 10.32f),
+    OriginOSMorphCheckpoint(0.360f, 152.67f, 79.10f, -5.01f, 3.76f, 22.72f, 3.34f, 3.34f, 22.72f, 26.06f, 26.06f, 1.67f, 21.72f, 15.03f, 10.02f, 11.69f),
+    OriginOSMorphCheckpoint(0.400f, 155.70f, 85.55f, -5.48f, 4.11f, 22.80f, 3.65f, 3.65f, 22.80f, 26.45f, 26.45f, 1.83f, 23.75f, 16.45f, 10.96f, 12.79f),
+    OriginOSMorphCheckpoint(0.440f, 158.83f, 92.39f, -5.81f, 4.36f, 22.88f, 3.87f, 3.87f, 22.88f, 26.75f, 26.75f, 1.94f, 25.18f, 17.43f, 11.62f, 13.56f),
+    OriginOSMorphCheckpoint(0.480f, 162.04f, 99.62f, -5.98f, 4.48f, 22.96f, 3.99f, 3.99f, 22.96f, 26.95f, 26.95f, 1.99f, 25.91f, 17.94f, 11.96f, 13.95f),
+    OriginOSMorphCheckpoint(0.520f, 165.33f, 107.22f, -5.98f, 4.48f, 23.04f, 3.99f, 3.99f, 23.04f, 27.03f, 27.03f, 1.99f, 25.91f, 17.94f, 11.96f, 13.95f),
+    OriginOSMorphCheckpoint(0.560f, 168.71f, 115.18f, -5.81f, 4.36f, 23.12f, 3.87f, 3.87f, 23.12f, 26.99f, 26.99f, 1.94f, 25.18f, 17.43f, 11.62f, 13.56f),
+    OriginOSMorphCheckpoint(0.600f, 172.15f, 123.49f, -5.48f, 4.11f, 23.20f, 3.65f, 3.65f, 23.20f, 26.85f, 26.85f, 1.83f, 23.75f, 16.45f, 10.96f, 12.79f),
+    OriginOSMorphCheckpoint(0.640f, 175.66f, 132.14f, -5.01f, 3.76f, 23.28f, 3.34f, 3.34f, 23.28f, 26.62f, 26.62f, 1.67f, 21.72f, 15.03f, 10.02f, 11.69f),
+    OriginOSMorphCheckpoint(0.680f, 179.25f, 141.12f, -4.42f, 3.32f, 23.36f, 2.95f, 2.95f, 23.36f, 26.31f, 26.31f, 1.47f, 19.17f, 13.27f, 8.85f, 10.32f),
+    OriginOSMorphCheckpoint(0.720f, 182.89f, 150.42f, -3.75f, 2.81f, 23.44f, 2.50f, 2.50f, 23.44f, 25.94f, 25.94f, 1.25f, 16.26f, 11.26f, 7.51f, 8.76f),
+    OriginOSMorphCheckpoint(0.760f, 186.59f, 160.03f, -3.03f, 2.27f, 23.52f, 2.02f, 2.02f, 23.52f, 25.54f, 25.54f, 1.01f, 13.14f, 9.10f, 6.07f, 7.08f),
+    OriginOSMorphCheckpoint(0.800f, 190.36f, 169.96f, -2.31f, 1.73f, 23.60f, 1.54f, 1.54f, 23.60f, 25.14f, 25.14f, 0.77f, 9.99f, 6.92f, 4.61f, 5.38f),
+    OriginOSMorphCheckpoint(0.840f, 194.18f, 180.18f, -1.61f, 1.21f, 23.68f, 1.07f, 1.07f, 23.68f, 24.75f, 24.75f, 0.54f, 6.98f, 4.83f, 3.22f, 3.76f),
+    OriginOSMorphCheckpoint(0.880f, 198.06f, 190.70f, -0.99f, 0.74f, 23.76f, 0.66f, 0.66f, 23.76f, 24.42f, 24.42f, 0.33f, 4.30f, 2.98f, 1.99f, 2.32f),
+    OriginOSMorphCheckpoint(0.920f, 201.99f, 201.52f, -0.49f, 0.37f, 23.84f, 0.33f, 0.33f, 23.84f, 24.17f, 24.17f, 0.16f, 2.12f, 1.47f, 0.98f, 1.14f),
+    OriginOSMorphCheckpoint(0.960f, 205.97f, 212.62f, -0.14f, 0.11f, 23.92f, 0.10f, 0.10f, 23.92f, 24.02f, 24.02f, 0.05f, 0.62f, 0.43f, 0.29f, 0.33f),
+    OriginOSMorphCheckpoint(1.000f, 210.00f, 224.00f, 0.00f, 0.00f, 24.00f, 0.00f, 0.00f, 24.00f, 24.00f, 24.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f)
+)
+
+fun interpolateCheckpoint(p: Float, isExpanding: Boolean): OriginOSMorphCheckpoint {
+    val table = if (isExpanding) CHECKPOINTS_OPENING_26 else CHECKPOINTS_CLOSING_26
     val clampedP = p.fastCoerceIn(0f, 1f)
     val floatIndex = clampedP * 25f
     val index1 = floatIndex.toInt().coerceIn(0, 24)
     val index2 = (index1 + 1).coerceIn(0, 25)
     val fraction = floatIndex - index1
-    val c1 = CHECKPOINTS_26[index1]
-    val c2 = CHECKPOINTS_26[index2]
+    val c1 = table[index1]
+    val c2 = table[index2]
     return OriginOSMorphCheckpoint(
         progress = clampedP,
         width = lerp(c1.width, c2.width, fraction),
@@ -129,19 +173,22 @@ fun interpolateCheckpoint(p: Float): OriginOSMorphCheckpoint {
         trOffsetX = lerp(c1.trOffsetX, c2.trOffsetX, fraction),
         trOffsetY = lerp(c1.trOffsetY, c2.trOffsetY, fraction),
         trRadius = lerp(c1.trRadius, c2.trRadius, fraction),
+        tlOffsetX = lerp(c1.tlOffsetX, c2.tlOffsetX, fraction),
+        tlOffsetY = lerp(c1.tlOffsetY, c2.tlOffsetY, fraction),
         tlRadius = lerp(c1.tlRadius, c2.tlRadius, fraction),
         blRadius = lerp(c1.blRadius, c2.blRadius, fraction),
         brRadius = lerp(c1.brRadius, c2.brRadius, fraction),
+        topEdgeDip = lerp(c1.topEdgeDip, c2.topEdgeDip, fraction),
+        bottomSag = lerp(c1.bottomSag, c2.bottomSag, fraction),
         leftWaist = lerp(c1.leftWaist, c2.leftWaist, fraction),
-        rightWaist = lerp(c1.rightWaist, c2.rightWaist, fraction),
-        topArch = lerp(c1.topArch, c2.topArch, fraction),
-        bottomSag = lerp(c1.bottomSag, c2.bottomSag, fraction)
+        leftBulge = lerp(c1.leftBulge, c2.leftBulge, fraction),
+        rightWaist = lerp(c1.rightWaist, c2.rightWaist, fraction)
     )
 }
 
 /**
  * Liquid morphing shape that generates continuous Bézier paths conforming to the
- * 26 checkpoints.
+ * 26 checkpoints for all 4 edges and all 4 corners.
  */
 class OriginOSFluidMorphShape(
     val checkpoint: OriginOSMorphCheckpoint,
@@ -178,19 +225,28 @@ class OriginOSFluidMorphShape(
 
         val targetW = cp.width * d
         val targetH = cp.height * d
+
+        // All 4 Corner Positions
+        val tlX = anchorRight - targetW + cp.tlOffsetX * d
+        val tlY = anchorTop + cp.tlOffsetY * d
         val trX = anchorRight + cp.trOffsetX * d
         val trY = anchorTop + cp.trOffsetY * d
-        val left = anchorRight - targetW
-        val bottom = anchorTop + targetH
+        val blX = anchorRight - targetW
+        val blY = anchorTop + targetH
+        val brX = anchorRight
+        val brY = anchorTop + targetH
 
+        // Corner Radii
         val trRadius = cp.trRadius * d
         val tlRadius = cp.tlRadius * d
         val brRadius = cp.brRadius * d
         val blRadius = cp.blRadius * d
 
-        val topArch = cp.topArch * d
+        // Dynamic Curvatures
+        val topEdgeDip = cp.topEdgeDip * d
         val botSag = cp.bottomSag * d
         val leftWaist = cp.leftWaist * d
+        val leftBulge = cp.leftBulge * d
         val rightWaist = cp.rightWaist * d
 
         val path = Path().apply {
@@ -199,118 +255,113 @@ class OriginOSFluidMorphShape(
             val K_br = 0.5522847f * brRadius
             val K_bl = 0.5522847f * blRadius
 
-            val startTopX = left + tlRadius
-            val startTopY = anchorTop
+            val startTopX = tlX + tlRadius
+            val startTopY = tlY
             val endTopX = trX - trRadius
             val endTopY = trY
 
             moveTo(startTopX, startTopY)
 
-            // 1. Top Edge with convex topArch dome
-            if (topArch > 0.5f && endTopX > startTopX) {
+            // --- 1. Top Edge: dynamic curvature (plunge dip vs rising dome arch) ---
+            if (abs(topEdgeDip) > 0.5f && endTopX > startTopX) {
                 val midTopX = (startTopX + endTopX) * 0.5f
-                val midTopY = (startTopY + endTopY) * 0.5f - topArch
-                cubicTo(
-                    startTopX + (midTopX - startTopX) * 0.5f, startTopY - topArch * 0.75f,
-                    midTopX - (midTopX - startTopX) * 0.5f, midTopY,
-                    midTopX, midTopY
-                )
-                cubicTo(
-                    midTopX + (endTopX - midTopX) * 0.5f, midTopY,
-                    endTopX - (endTopX - midTopX) * 0.5f, endTopY - topArch * 0.75f,
-                    endTopX, endTopY
-                )
+                val midTopY = (startTopY + endTopY) * 0.5f + topEdgeDip
+                val cp1X = startTopX + (midTopX - startTopX) * 0.55f
+                val cp1Y = startTopY + topEdgeDip * 0.70f
+                val cp2X = midTopX - (midTopX - startTopX) * 0.45f
+                val cp2Y = midTopY
+                cubicTo(cp1X, cp1Y, cp2X, cp2Y, midTopX, midTopY)
+
+                val cp3X = midTopX + (endTopX - midTopX) * 0.45f
+                val cp3Y = midTopY
+                val cp4X = endTopX - (endTopX - midTopX) * 0.55f
+                val cp4Y = endTopY + topEdgeDip * 0.70f
+                cubicTo(cp3X, cp3Y, cp4X, cp4Y, endTopX, endTopY)
             } else {
                 lineTo(endTopX, endTopY)
             }
 
-            // 2. Top-Right Corner (dynamically shifted position & radius)
+            // --- 2. Top-Right Corner ---
             cubicTo(
                 endTopX + K_tr, endTopY,
                 trX, trY + trRadius - K_tr,
                 trX, trY + trRadius
             )
 
-            // 3. Right Flank with rightWaist neck
+            // --- 3. Right Flank ---
+            val rfStartX = trX
             val rfStartY = trY + trRadius
-            val rfEndX = anchorRight
-            val rfEndY = bottom - brRadius
+            val rfEndX = brX
+            val rfEndY = brY - brRadius
             if (rightWaist > 0.5f && rfEndY > rfStartY) {
-                val waistY = rfStartY + (rfEndY - rfStartY) * 0.42f
-                val waistX = (trX + rfEndX) * 0.5f - rightWaist
-                cubicTo(
-                    trX, waistY - 18f * d,
-                    waistX, waistY - 12f * d,
-                    waistX, waistY
-                )
-                cubicTo(
-                    waistX, waistY + 12f * d,
-                    rfEndX, waistY + 18f * d,
-                    rfEndX, rfEndY
-                )
+                val rfSpan = rfEndY - rfStartY
+                val cp1X = trX - rightWaist * 0.8f
+                val cp1Y = rfStartY + rfSpan * 0.35f
+                val cp2X = brX - rightWaist * 0.2f
+                val cp2Y = rfStartY + rfSpan * 0.75f
+                cubicTo(cp1X, cp1Y, cp2X, cp2Y, rfEndX, rfEndY)
             } else {
                 lineTo(rfEndX, rfEndY)
             }
 
-            // 4. Bottom-Right Corner
+            // --- 4. Bottom-Right Corner ---
             cubicTo(
-                rfEndX, rfEndY + K_br,
-                rfEndX - brRadius + K_br, bottom,
-                rfEndX - brRadius, bottom
+                brX, brY - brRadius + K_br,
+                brX - brRadius + K_br, brY,
+                brX - brRadius, brY
             )
 
-            // 5. Bottom Edge with bottomSag teardrop
-            val bfStartX = rfEndX - brRadius
-            val bfEndX = left + blRadius
-            if (botSag > 0.5f && bfStartX > bfEndX) {
-                val midBotX = (bfStartX + bfEndX) * 0.5f
-                val midBotY = bottom + botSag
-                cubicTo(
-                    bfStartX - (bfStartX - midBotX) * 0.5f, bottom + botSag * 0.75f,
-                    midBotX + (bfStartX - midBotX) * 0.5f, midBotY,
-                    midBotX, midBotY
-                )
-                cubicTo(
-                    midBotX - (midBotX - bfEndX) * 0.5f, midBotY,
-                    bfEndX + (midBotX - bfEndX) * 0.5f, bottom + botSag * 0.75f,
-                    bfEndX, bottom
-                )
+            // --- 5. Bottom Edge: viscous droplet sag ---
+            val startBotX = brX - brRadius
+            val startBotY = brY
+            val endBotX = blX + blRadius
+            val endBotY = blY
+            if (botSag > 0.5f && startBotX > endBotX) {
+                val midBotX = (startBotX + endBotX) * 0.5f
+                val midBotY = (startBotY + endBotY) * 0.5f + botSag
+                val bCp1X = startBotX - (startBotX - midBotX) * 0.5f
+                val bCp1Y = startBotY + botSag * 0.75f
+                val bCp2X = midBotX + (startBotX - midBotX) * 0.5f
+                val bCp2Y = midBotY
+                cubicTo(bCp1X, bCp1Y, bCp2X, bCp2Y, midBotX, midBotY)
+
+                val bCp3X = midBotX - (midBotX - endBotX) * 0.5f
+                val bCp3Y = midBotY
+                val bCp4X = endBotX + (midBotX - endBotX) * 0.5f
+                val bCp4Y = endBotY + botSag * 0.75f
+                cubicTo(bCp3X, bCp3Y, bCp4X, bCp4Y, endBotX, endBotY)
             } else {
-                lineTo(bfEndX, bottom)
+                lineTo(endBotX, endBotY)
             }
 
-            // 6. Bottom-Left Corner
+            // --- 6. Bottom-Left Corner ---
             cubicTo(
-                bfEndX - K_bl, bottom,
-                left, bottom - blRadius + K_bl,
-                left, bottom - blRadius
+                blX + blRadius - K_bl, blY,
+                blX, blY - blRadius + K_bl,
+                blX, blY - blRadius
             )
 
-            // 7. Left Flank with leftWaist concave neck
-            val lfStartY = bottom - blRadius
-            val lfEndY = anchorTop + tlRadius
-            if (leftWaist > 0.5f && lfStartY > lfEndY) {
-                val waistY = lfEndY + (lfStartY - lfEndY) * 0.52f
-                val waistX = left + leftWaist
-                cubicTo(
-                    left, waistY + 22f * d,
-                    waistX, waistY + 16f * d,
-                    waistX, waistY
-                )
-                cubicTo(
-                    waistX, waistY - 16f * d,
-                    left, waistY - 22f * d,
-                    left, lfEndY
-                )
+            // --- 7. Left Flank: organic bell bulge & waist ---
+            val lfStartX = blX
+            val lfStartY = blY - blRadius
+            val lfEndX = tlX
+            val lfEndY = tlY + tlRadius
+            if ((leftWaist > 0.5f || leftBulge > 0.5f) && lfStartY > lfEndY) {
+                val lfSpan = lfStartY - lfEndY
+                val cp1X = blX - leftBulge * 0.6f
+                val cp1Y = lfStartY - lfSpan * 0.35f
+                val cp2X = tlX + leftWaist * 0.7f
+                val cp2Y = lfStartY - lfSpan * 0.75f
+                cubicTo(cp1X, cp1Y, cp2X, cp2Y, lfEndX, lfEndY)
             } else {
-                lineTo(left, lfEndY)
+                lineTo(lfEndX, lfEndY)
             }
 
-            // 8. Top-Left Corner
+            // --- 8. Top-Left Corner ---
             cubicTo(
-                left, lfEndY - K_tl,
-                startTopX - K_tl, anchorTop,
-                startTopX, anchorTop
+                tlX, tlY + tlRadius - K_tl,
+                tlX + tlRadius - K_tl, tlY,
+                tlX + tlRadius, tlY
             )
 
             close()
@@ -334,6 +385,7 @@ data class OriginOSMenuItem(
  * - Liquid Glass Backdrop Mode (with blur, lens, vibrancy, highlight)
  * - 100% Solid Opaque Mode (crisp opaque card with realistic shadow)
  * - Symmetrical, synchronized open & close speeds with user-controlled multipliers
+ * - Frame-by-frame 26-checkpoint fluid morphing for all 4 edges & all 4 corners
  */
 @Composable
 fun OriginOSDropdownMenu(
@@ -377,9 +429,11 @@ fun OriginOSDropdownMenu(
     }
 
     val p = animProgress.value
-    val checkpoint = remember(p) { interpolateCheckpoint(p) }
+    val checkpoint = remember(p, isExpanded) {
+        interpolateCheckpoint(p, isExpanding = isExpanded)
+    }
 
-    val extraPadding = 32.dp
+    val extraPadding = 36.dp
     val extraPaddingPx = with(density) { extraPadding.toPx() }
 
     val morphShape = remember(checkpoint, extraPaddingPx, isLiquidFusionEnabled) {
@@ -397,7 +451,7 @@ fun OriginOSDropdownMenu(
 
     // Canvas size encompassing shadow, dome arch, and droplet sag bounds
     val canvasWidth = targetWidth + extraPadding * 2
-    val canvasHeight = targetHeight + extraPadding * 2
+    val canvasHeight = targetHeight + extraPadding * 2 + 40.dp
 
     // Fixed root layout bounds: exactly matches the pill at all times, preventing any screen shift!
     Box(
@@ -499,19 +553,17 @@ fun OriginOSDropdownMenu(
                                 .clickable(
                                     interactionSource = remember { MutableInteractionSource() },
                                     indication = null
-                                ) {
-                                    onExpandToggle()
-                                },
+                                ) { onExpandToggle() },
                             contentAlignment = Alignment.Center
                         ) {
-                            MoreVerticalPillIcon(textPrimary)
+                            ThreeDotsPillIcon(textPrimary)
                         }
                     }
                 }
             }
 
             // --- 3. Dropdown Menu Items Content ---
-            val menuAlpha = ((p - 0.20f) / 0.35f).fastCoerceIn(0f, 1f)
+            val menuAlpha = ((p - 0.65f) / 0.30f).fastCoerceIn(0f, 1f)
             if (menuAlpha > 0.01f) {
                 Column(
                     modifier = Modifier
@@ -528,7 +580,7 @@ fun OriginOSDropdownMenu(
                         val itemSlideY = lerp(
                             14f,
                             0f,
-                            ((p - 0.20f - index * 0.035f) / 0.30f).fastCoerceIn(0f, 1f)
+                            ((p - 0.65f - index * 0.035f) / 0.25f).fastCoerceIn(0f, 1f)
                         )
 
                         Box(
@@ -598,8 +650,9 @@ internal fun SearchPillIcon(tint: Color) {
             drawLine(
                 color = tint,
                 start = Offset(cx + r * 0.707f, cy + r * 0.707f),
-                end = Offset(15.dp.toPx(), 15.dp.toPx()),
-                strokeWidth = 2.dp.toPx()
+                end = Offset(14.dp.toPx(), 14.dp.toPx()),
+                strokeWidth = 2.dp.toPx(),
+                cap = androidx.compose.ui.graphics.StrokeCap.Round
             )
         }
     }
@@ -607,33 +660,24 @@ internal fun SearchPillIcon(tint: Color) {
 
 @Composable
 internal fun PlusPillIcon(tint: Color) {
-    androidx.compose.foundation.Canvas(Modifier.size(18.dp)) {
-        val midX = size.width / 2f
-        val midY = size.height / 2f
-        val stroke = 2.dp.toPx()
-        val len = 6.dp.toPx()
-        drawLine(tint, Offset(midX - len, midY), Offset(midX + len, midY), stroke)
-        drawLine(tint, Offset(midX, midY - len), Offset(midX, midY + len), stroke)
+    Box(Modifier.size(18.dp), contentAlignment = Alignment.Center) {
+        androidx.compose.foundation.Canvas(Modifier.size(18.dp)) {
+            val stroke = 2.dp.toPx()
+            drawLine(tint, Offset(9.dp.toPx(), 4.dp.toPx()), Offset(9.dp.toPx(), 14.dp.toPx()), stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+            drawLine(tint, Offset(4.dp.toPx(), 9.dp.toPx()), Offset(14.dp.toPx(), 9.dp.toPx()), stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+        }
     }
 }
 
 @Composable
-internal fun MoreVerticalPillIcon(tint: Color) {
-    androidx.compose.foundation.Canvas(Modifier.size(18.dp)) {
-        val cx = size.width / 2f
-        val r = 2.5.dp.toPx()
-        val stroke = 1.8.dp.toPx()
-        drawCircle(
-            color = tint,
-            radius = r,
-            center = Offset(cx, size.height * 0.35f),
-            style = androidx.compose.ui.graphics.drawscope.Stroke(width = stroke)
-        )
-        drawCircle(
-            color = tint,
-            radius = r,
-            center = Offset(cx, size.height * 0.65f),
-            style = androidx.compose.ui.graphics.drawscope.Stroke(width = stroke)
-        )
+internal fun ThreeDotsPillIcon(tint: Color) {
+    Box(Modifier.size(18.dp), contentAlignment = Alignment.Center) {
+        androidx.compose.foundation.Canvas(Modifier.size(18.dp)) {
+            val r = 1.6.dp.toPx()
+            val cx = 9.dp.toPx()
+            drawCircle(tint, r, Offset(cx, 4.dp.toPx()))
+            drawCircle(tint, r, Offset(cx, 9.dp.toPx()))
+            drawCircle(tint, r, Offset(cx, 14.dp.toPx()))
+        }
     }
 }
