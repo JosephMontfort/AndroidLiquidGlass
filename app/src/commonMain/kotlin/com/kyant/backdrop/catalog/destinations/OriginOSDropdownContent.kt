@@ -466,27 +466,27 @@ fun OriginOSDropdownContent() {
                                     style = TextStyle(textSecondary, 11.sp, FontWeight.Bold)
                                 )
                                 BasicText(
-                                    text = "• 26 Checkpoints: Converging bubble trajectory measured from OriginOS 7",
+                                    text = "• Suck & Spit Fluid Physics: Pill (132x44dp) implodes to 78x78dp circular droplet (r=39dp)",
                                     style = TextStyle(textPrimary, 11.sp, fontFamily = FontFamily.Monospace)
                                 )
                                 BasicText(
-                                    text = "• Converging Bubble Flight: Pill (132x44dp) contracts to 92x96dp circular orb (r=40dp)",
+                                    text = "• Unified Liquid Contour: Single center of mass with strictly convex Bézier arcs (zero horns/folds)",
                                     style = TextStyle(textPrimary, 11.sp, fontFamily = FontFamily.Monospace)
                                 )
                                 BasicText(
-                                    text = "• Plunging Top Edge: Top corners & edge plunge +55.8dp downward into bubble center",
+                                    text = "• Ejection & Sag: Compressed droplet spits downward & leftward into 210x224dp card (+12dp sag)",
                                     style = TextStyle(textPrimary, 11.sp, fontFamily = FontFamily.Monospace)
                                 )
                                 BasicText(
-                                    text = "• Rising Dome Arch: Upper boundary rebounds into -14dp expansive dome before squircle settling",
+                                    text = "• Dome Arch: Upper boundary rises smoothly into dome arch (-8dp) before settling",
                                     style = TextStyle(textPrimary, 11.sp, fontFamily = FontFamily.Monospace)
                                 )
                                 BasicText(
-                                    text = "• Exact Flight Reversal: Closing trajectory is the exact mathematical reverse of opening",
+                                    text = "• Exact Reverse Flight: Closing reverses through exact identical suck/spit pathway",
                                     style = TextStyle(textPrimary, 11.sp, fontFamily = FontFamily.Monospace)
                                 )
                                 BasicText(
-                                    text = "• Impact Absorption Bounce: Collapsed pill bounces upward (-5.5dp -> +1.8dp -> 0dp)",
+                                    text = "• Single Impact Overshoot: Collapsed pill recoils upward (-4.5dp) and settles cleanly to 0dp",
                                     style = TextStyle(textPrimary, 11.sp, fontFamily = FontFamily.Monospace)
                                 )
                             }

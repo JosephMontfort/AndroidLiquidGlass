@@ -77,93 +77,83 @@ import kotlin.math.abs
  *    right neck (14dp).
  * 3. Viscous Droplet Sag: Bottom edge sags downward (+22dp) under fluid momentum.
  * 4. Convex Dome Arch: Top edge rebounds upward into a wide dome arch (-15dp).
- * 5. Converging Bubble Pathway: Wide pill (132x44dp) contracts horizontally into
- *    a near-circle bubble (92x96dp, radius 40dp) mid-flight while top edge plunges (+55.8dp).
- * 6. Symmetric Reversal During Flight: Closing trajectory is the exact reverse of opening.
- * 7. Post-Closing Impact Bounce: Collapsed pill absorbs closing momentum with spring rebound.
+ * OriginOS 7 "Suck & Spit" Fluid Morph Checkpoint.
+ *
+ * Implements physical liquid suction and ejection:
+ * 1. "The Suck" (p: 0.0 -> 0.36): Wide pill (132x44dp) smoothly implodes into a
+ *    dense, unified circular liquid droplet (78x78dp, radius 39dp) centered under the 3-dots anchor.
+ * 2. "The Spit" (p: 0.36 -> 1.0): The compressed droplet blooms / ejects downward and leftward,
+ *    stretching with viscous droplet sag (+12dp) and rising dome arch (-8dp) before settling
+ *    into the 210x224dp squircle card (radius 24dp).
+ * 3. Exact Reverse Flight: Closing reverses through the exact same smooth bubble trajectory.
+ * 4. Post-Closing Impact: Collapsed pill absorbs closing momentum with a single clean overshoot & settle.
  */
-data class OriginOSMorphCheckpoint(
+data class OriginOSSuckSpitCheckpoint(
     val progress: Float,
+    val centerX: Float,
+    val centerY: Float,
     val width: Float,
     val height: Float,
-    val trOffsetX: Float,
-    val trOffsetY: Float,
-    val trRadius: Float,
-    val tlOffsetX: Float,
-    val tlOffsetY: Float,
-    val tlRadius: Float,
-    val blRadius: Float,
-    val brRadius: Float,
-    val topEdgeDip: Float, // positive = downward dip, negative = upward dome arch
-    val bottomSag: Float,  // viscous droplet sag downwards
-    val leftWaist: Float,  // concave neck indentation on left flank
-    val leftBulge: Float,  // convex belly bulge on lower left flank
-    val rightWaist: Float  // concave neck indentation on right flank
+    val radius: Float,
+    val topEdgeDip: Float, // positive = plunge dip, negative = dome arch
+    val bottomSag: Float   // viscous droplet sag
 )
 
-val CHECKPOINTS_CONVERGING_26 = listOf(
-    OriginOSMorphCheckpoint(0.000f, 132.00f, 44.00f, 0.00f, 0.00f, 22.00f, 0.00f, 0.00f, 22.00f, 22.00f, 22.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f),
-    OriginOSMorphCheckpoint(0.040f, 130.88f, 45.46f, -0.58f, 2.02f, 22.50f, 0.58f, 1.95f, 22.50f, 22.56f, 22.56f, 3.38f, 0.43f, 0.50f, 0.25f, 0.43f),
-    OriginOSMorphCheckpoint(0.080f, 127.84f, 49.41f, -1.73f, 6.04f, 23.87f, 1.73f, 5.83f, 23.87f, 24.08f, 24.08f, 6.49f, 1.47f, 1.51f, 0.99f, 1.29f),
-    OriginOSMorphCheckpoint(0.120f, 123.36f, 55.23f, -3.23f, 11.32f, 25.89f, 3.23f, 10.91f, 25.89f, 26.32f, 26.32f, 9.07f, 2.98f, 2.83f, 2.17f, 2.43f),
-    OriginOSMorphCheckpoint(0.160f, 117.92f, 62.30f, -4.97f, 17.41f, 28.34f, 4.97f, 16.78f, 28.34f, 29.04f, 29.04f, 10.92f, 4.83f, 4.35f, 3.71f, 3.73f),
-    OriginOSMorphCheckpoint(0.200f, 112.00f, 70.00f, -6.84f, 23.93f, 31.00f, 6.84f, 23.08f, 31.00f, 32.00f, 32.00f, 11.88f, 6.92f, 5.98f, 5.53f, 5.13f),
-    OriginOSMorphCheckpoint(0.240f, 106.08f, 77.70f, -8.72f, 30.54f, 33.66f, 8.72f, 29.45f, 33.66f, 34.96f, 34.96f, 11.88f, 9.10f, 7.63f, 7.50f, 6.54f),
-    OriginOSMorphCheckpoint(0.280f, 100.64f, 84.77f, -10.54f, 36.90f, 36.11f, 10.54f, 35.58f, 36.11f, 37.68f, 37.68f, 10.92f, 11.26f, 9.23f, 9.50f, 7.91f),
-    OriginOSMorphCheckpoint(0.320f, 96.16f, 90.59f, -12.21f, 42.72f, 38.13f, 12.21f, 41.19f, 38.13f, 39.92f, 39.92f, 9.07f, 13.27f, 10.68f, 11.41f, 9.15f),
-    OriginOSMorphCheckpoint(0.360f, 93.12f, 94.54f, -13.63f, 47.72f, 39.50f, 13.63f, 46.01f, 39.50f, 41.44f, 41.44f, 6.49f, 15.03f, 11.93f, 13.10f, 10.23f),
-    OriginOSMorphCheckpoint(0.400f, 92.00f, 96.00f, -14.77f, 51.68f, 40.00f, 14.77f, 49.83f, 40.00f, 42.00f, 42.00f, 3.38f, 16.45f, 12.92f, 14.47f, 11.07f),
-    OriginOSMorphCheckpoint(0.440f, 93.50f, 97.63f, -15.55f, 54.42f, 39.80f, 15.55f, 52.48f, 39.80f, 41.77f, 41.77f, 0.00f, 17.43f, 13.61f, 15.44f, 11.66f),
-    OriginOSMorphCheckpoint(0.480f, 97.73f, 102.22f, -15.95f, 55.82f, 39.22f, 15.95f, 53.83f, 39.22f, 41.13f, 41.13f, -4.22f, 17.94f, 13.96f, 15.94f, 11.96f),
-    OriginOSMorphCheckpoint(0.520f, 104.27f, 109.31f, -15.95f, 55.82f, 38.34f, 15.95f, 53.83f, 38.34f, 40.13f, 40.13f, -8.05f, 17.94f, 13.96f, 15.94f, 11.96f),
-    OriginOSMorphCheckpoint(0.560f, 112.70f, 118.45f, -15.55f, 54.42f, 37.19f, 15.55f, 52.48f, 37.19f, 38.84f, 38.84f, -11.13f, 17.43f, 13.61f, 15.44f, 11.66f),
-    OriginOSMorphCheckpoint(0.600f, 122.59f, 129.19f, -14.77f, 51.68f, 35.85f, 14.77f, 49.83f, 35.85f, 37.33f, 37.33f, -13.18f, 16.45f, 12.92f, 14.47f, 11.07f),
-    OriginOSMorphCheckpoint(0.640f, 133.54f, 141.06f, -13.63f, 47.72f, 34.37f, 13.63f, 46.01f, 34.37f, 35.66f, 35.66f, -13.99f, 15.03f, 11.93f, 13.10f, 10.23f),
-    OriginOSMorphCheckpoint(0.680f, 145.11f, 153.61f, -12.21f, 42.72f, 32.80f, 12.21f, 41.19f, 32.80f, 33.90f, 33.90f, -13.50f, 13.27f, 10.68f, 11.41f, 9.15f),
-    OriginOSMorphCheckpoint(0.720f, 156.89f, 166.39f, -10.54f, 36.90f, 31.20f, 10.54f, 35.58f, 31.20f, 32.10f, 32.10f, -11.75f, 11.26f, 9.23f, 9.50f, 7.91f),
-    OriginOSMorphCheckpoint(0.760f, 168.46f, 178.94f, -8.72f, 30.54f, 29.63f, 8.72f, 29.45f, 29.63f, 30.34f, 30.34f, -8.91f, 9.10f, 7.63f, 7.50f, 6.54f),
-    OriginOSMorphCheckpoint(0.800f, 179.41f, 190.81f, -6.84f, 23.93f, 28.15f, 6.84f, 23.08f, 28.15f, 28.67f, 28.67f, -5.23f, 6.92f, 5.98f, 5.53f, 5.13f),
-    OriginOSMorphCheckpoint(0.840f, 189.30f, 201.55f, -4.97f, 17.41f, 26.81f, 4.97f, 16.78f, 26.81f, 27.16f, 27.16f, -1.07f, 4.83f, 4.35f, 3.71f, 3.73f),
-    OriginOSMorphCheckpoint(0.880f, 197.73f, 210.69f, -3.23f, 11.32f, 25.66f, 3.23f, 10.91f, 25.66f, 25.87f, 25.87f, 0.00f, 2.98f, 2.83f, 2.17f, 2.43f),
-    OriginOSMorphCheckpoint(0.920f, 204.27f, 217.78f, -1.73f, 6.04f, 24.78f, 1.73f, 5.83f, 24.78f, 24.87f, 24.87f, 0.00f, 1.47f, 1.51f, 0.99f, 1.29f),
-    OriginOSMorphCheckpoint(0.960f, 208.50f, 222.37f, -0.58f, 2.02f, 24.20f, 0.58f, 1.95f, 24.20f, 24.23f, 24.23f, 0.00f, 0.43f, 0.50f, 0.25f, 0.43f),
-    OriginOSMorphCheckpoint(1.000f, 210.00f, 224.00f, 0.00f, 0.00f, 24.00f, 0.00f, 0.00f, 24.00f, 24.00f, 24.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f)
+val CHECKPOINTS_SUCK_AND_SPIT_26 = listOf(
+    OriginOSSuckSpitCheckpoint(0.000f, 144.00f, 22.00f, 132.00f, 44.00f, 22.00f, 0.00f, 0.00f),
+    OriginOSSuckSpitCheckpoint(0.040f, 144.48f, 23.47f, 130.15f, 45.17f, 22.58f, 1.20f, 1.71f),
+    OriginOSSuckSpitCheckpoint(0.080f, 145.77f, 27.43f, 125.19f, 48.29f, 24.15f, 2.25f, 3.21f),
+    OriginOSSuckSpitCheckpoint(0.120f, 147.63f, 33.15f, 118.00f, 52.81f, 26.41f, 3.03f, 4.33f),
+    OriginOSSuckSpitCheckpoint(0.160f, 149.84f, 39.93f, 109.48f, 58.18f, 29.09f, 3.45f, 4.92f),
+    OriginOSSuckSpitCheckpoint(0.200f, 152.16f, 47.07f, 100.52f, 63.82f, 31.91f, 3.45f, 4.92f),
+    OriginOSSuckSpitCheckpoint(0.240f, 154.37f, 53.85f, 92.00f, 69.19f, 34.59f, 3.03f, 4.33f),
+    OriginOSSuckSpitCheckpoint(0.280f, 156.23f, 59.57f, 84.81f, 73.71f, 36.85f, 2.25f, 3.21f),
+    OriginOSSuckSpitCheckpoint(0.320f, 157.52f, 63.53f, 79.85f, 76.83f, 38.42f, 1.20f, 1.71f),
+    OriginOSSuckSpitCheckpoint(0.360f, 158.00f, 65.00f, 78.00f, 78.00f, 39.00f, 0.00f, 0.00f),
+    OriginOSSuckSpitCheckpoint(0.400f, 157.40f, 65.53f, 79.48f, 79.64f, 38.83f, 2.66f, 2.28f),
+    OriginOSSuckSpitCheckpoint(0.440f, 155.72f, 67.02f, 83.67f, 84.27f, 38.36f, 4.50f, 4.36f),
+    OriginOSSuckSpitCheckpoint(0.480f, 153.11f, 69.34f, 90.18f, 91.47f, 37.62f, 4.97f, 6.17f),
+    OriginOSSuckSpitCheckpoint(0.520f, 149.72f, 72.34f, 98.62f, 100.81f, 36.66f, 3.91f, 7.64f),
+    OriginOSSuckSpitCheckpoint(0.560f, 145.71f, 75.90f, 108.62f, 111.86f, 35.52f, 1.65f, 8.73f),
+    OriginOSSuckSpitCheckpoint(0.600f, 141.23f, 79.87f, 119.77f, 124.20f, 34.25f, -1.25f, 9.42f),
+    OriginOSSuckSpitCheckpoint(0.640f, 136.44f, 84.12f, 131.69f, 137.38f, 32.90f, -4.18f, 9.71f),
+    OriginOSSuckSpitCheckpoint(0.680f, 131.50f, 88.50f, 144.00f, 151.00f, 31.50f, -6.47f, 9.60f),
+    OriginOSSuckSpitCheckpoint(0.720f, 126.56f, 92.88f, 156.31f, 164.62f, 30.10f, -7.78f, 9.12f),
+    OriginOSSuckSpitCheckpoint(0.760f, 121.77f, 97.13f, 168.23f, 177.80f, 28.75f, -7.90f, 8.31f),
+    OriginOSSuckSpitCheckpoint(0.800f, 117.29f, 101.10f, 179.38f, 190.14f, 27.48f, -6.82f, 7.23f),
+    OriginOSSuckSpitCheckpoint(0.840f, 113.28f, 104.66f, 189.38f, 201.19f, 26.34f, -4.70f, 5.94f),
+    OriginOSSuckSpitCheckpoint(0.880f, 109.89f, 107.66f, 197.82f, 210.53f, 25.38f, -1.87f, 4.50f),
+    OriginOSSuckSpitCheckpoint(0.920f, 107.28f, 109.98f, 204.33f, 217.73f, 24.64f, 0.00f, 2.98f),
+    OriginOSSuckSpitCheckpoint(0.960f, 105.60f, 111.47f, 208.52f, 222.36f, 24.17f, 0.00f, 1.46f),
+    OriginOSSuckSpitCheckpoint(1.000f, 105.00f, 112.00f, 210.00f, 224.00f, 24.00f, 0.00f, 0.00f)
 )
 
-fun interpolateCheckpoint(progress: Float): OriginOSMorphCheckpoint {
+fun interpolateSuckSpitCheckpoint(progress: Float): OriginOSSuckSpitCheckpoint {
     val p = progress.fastCoerceIn(0f, 1f)
     val floatIndex = p * 25f
     val index1 = floatIndex.toInt().coerceIn(0, 24)
     val index2 = (index1 + 1).coerceIn(0, 25)
     val fraction = floatIndex - index1
-    val c1 = CHECKPOINTS_CONVERGING_26[index1]
-    val c2 = CHECKPOINTS_CONVERGING_26[index2]
-    return OriginOSMorphCheckpoint(
+    val c1 = CHECKPOINTS_SUCK_AND_SPIT_26[index1]
+    val c2 = CHECKPOINTS_SUCK_AND_SPIT_26[index2]
+    return OriginOSSuckSpitCheckpoint(
         progress = p,
+        centerX = lerp(c1.centerX, c2.centerX, fraction),
+        centerY = lerp(c1.centerY, c2.centerY, fraction),
         width = lerp(c1.width, c2.width, fraction),
         height = lerp(c1.height, c2.height, fraction),
-        trOffsetX = lerp(c1.trOffsetX, c2.trOffsetX, fraction),
-        trOffsetY = lerp(c1.trOffsetY, c2.trOffsetY, fraction),
-        trRadius = lerp(c1.trRadius, c2.trRadius, fraction),
-        tlOffsetX = lerp(c1.tlOffsetX, c2.tlOffsetX, fraction),
-        tlOffsetY = lerp(c1.tlOffsetY, c2.tlOffsetY, fraction),
-        tlRadius = lerp(c1.tlRadius, c2.tlRadius, fraction),
-        blRadius = lerp(c1.blRadius, c2.blRadius, fraction),
-        brRadius = lerp(c1.brRadius, c2.brRadius, fraction),
+        radius = lerp(c1.radius, c2.radius, fraction),
         topEdgeDip = lerp(c1.topEdgeDip, c2.topEdgeDip, fraction),
-        bottomSag = lerp(c1.bottomSag, c2.bottomSag, fraction),
-        leftWaist = lerp(c1.leftWaist, c2.leftWaist, fraction),
-        leftBulge = lerp(c1.leftBulge, c2.leftBulge, fraction),
-        rightWaist = lerp(c1.rightWaist, c2.rightWaist, fraction)
+        bottomSag = lerp(c1.bottomSag, c2.bottomSag, fraction)
     )
 }
 
 /**
- * Liquid morphing shape that generates continuous Bézier paths conforming to the
- * 26 checkpoints for all 4 edges and all 4 corners.
+ * Liquid morphing shape that generates continuous convex fluid outlines.
+ * Completely eliminates corner divergence, creases, and paper folding.
  */
 class OriginOSFluidMorphShape(
-    val checkpoint: OriginOSMorphCheckpoint,
+    val checkpoint: OriginOSSuckSpitCheckpoint,
     val extraPaddingPx: Float,
     val isLiquidFusionEnabled: Boolean = true
 ) : Shape {
@@ -181,93 +171,55 @@ class OriginOSFluidMorphShape(
         val anchorRight = w - extraPaddingPx
         val anchorTop = extraPaddingPx
 
+        val cx = cp.centerX * d + (anchorRight - 210f * d)
+        val cy = cp.centerY * d + anchorTop
+        val curW = cp.width * d
+        val curH = cp.height * d
+
+        val maxR = minOf(curW * 0.5f, curH * 0.5f)
+        val r = minOf(cp.radius * d, maxR)
+
         if (!isLiquidFusionEnabled) {
-            val curW = cp.width * d
-            val curH = cp.height * d
-            val curR = cp.trRadius * d
             val rect = RoundRect(
-                left = anchorRight - curW,
-                top = anchorTop,
-                right = anchorRight,
-                bottom = anchorTop + curH,
-                cornerRadius = CornerRadius(curR, curR)
+                left = cx - curW * 0.5f,
+                top = cy - curH * 0.5f,
+                right = cx + curW * 0.5f,
+                bottom = cy + curH * 0.5f,
+                cornerRadius = CornerRadius(r, r)
             )
             return Outline.Rounded(rect)
         }
 
-        val targetW = cp.width * d
-        val targetH = cp.height * d
-
-        // All 4 Corner Positions
-        val tlX = anchorRight - targetW + cp.tlOffsetX * d
-        val tlY = anchorTop + cp.tlOffsetY * d
-        val trX = anchorRight + cp.trOffsetX * d
-        val trY = anchorTop + cp.trOffsetY * d
-        val blX = anchorRight - targetW
-        val blY = anchorTop + targetH
-        val brX = anchorRight
-        val brY = anchorTop + targetH
-
-        // Corner Radii with Proportional Clamping to form seamless near-circle/bubble
-        val rawTrRadius = cp.trRadius * d
-        val rawTlRadius = cp.tlRadius * d
-        val rawBrRadius = cp.brRadius * d
-        val rawBlRadius = cp.blRadius * d
-
-        val topSpan = (trX - tlX).coerceAtLeast(1f)
-        val topScale = (topSpan / (rawTlRadius + rawTrRadius)).coerceAtMost(1f)
-        val effTlR = rawTlRadius * topScale
-        val effTrR = rawTrRadius * topScale
-
-        val botSpan = (brX - blX).coerceAtLeast(1f)
-        val botScale = (botSpan / (rawBlRadius + rawBrRadius)).coerceAtMost(1f)
-        val effBlR = rawBlRadius * botScale
-        val effBrR = rawBrRadius * botScale
-
-        val rightSpan = (brY - trY).coerceAtLeast(1f)
-        val rightScale = (rightSpan / (effTrR + effBrR)).coerceAtMost(1f)
-        val trRadius = effTrR * rightScale
-        val brRadius = effBrR * rightScale
-
-        val leftSpan = (blY - tlY).coerceAtLeast(1f)
-        val leftScale = (leftSpan / (effTlR + effBlR)).coerceAtMost(1f)
-        val tlRadius = effTlR * leftScale
-        val blRadius = effBlR * leftScale
-
-        // Dynamic Curvatures
-        val topEdgeDip = cp.topEdgeDip * d
+        val left = cx - curW * 0.5f
+        val right = cx + curW * 0.5f
+        val top = cy - curH * 0.5f
+        val bottom = cy + curH * 0.5f
+        val topDip = cp.topEdgeDip * d
         val botSag = cp.bottomSag * d
-        val leftWaist = cp.leftWaist * d
-        val leftBulge = cp.leftBulge * d
-        val rightWaist = cp.rightWaist * d
+        val K = 0.5522847f * r
 
         val path = Path().apply {
-            val K_tr = 0.5522847f * trRadius
-            val K_tl = 0.5522847f * tlRadius
-            val K_br = 0.5522847f * brRadius
-            val K_bl = 0.5522847f * blRadius
-
-            val startTopX = tlX + tlRadius
-            val startTopY = tlY
-            val endTopX = trX - trRadius
-            val endTopY = trY
+            val startTopX = left + r
+            val startTopY = top
+            val endTopX = right - r
+            val endTopY = top
 
             moveTo(startTopX, startTopY)
 
-            // --- 1. Top Edge: dynamic curvature (plunge dip vs rising dome arch) ---
-            if (abs(topEdgeDip) > 0.5f && endTopX > startTopX + 1f) {
-                val midTopX = (startTopX + endTopX) * 0.5f
-                val midTopY = (startTopY + endTopY) * 0.5f + topEdgeDip
-                val cp1X = startTopX + (midTopX - startTopX) * 0.55f
-                val cp1Y = startTopY + topEdgeDip * 0.70f
-                val cp2X = midTopX - (midTopX - startTopX) * 0.45f
-                val cp2Y = midTopY
-                cubicTo(cp1X, cp1Y, cp2X, cp2Y, midTopX, midTopY)
+            // --- 1. Top Edge with continuous fluid curvature ---
+            if (abs(topDip) > 0.5f && endTopX > startTopX + 1f) {
+                val midX = (startTopX + endTopX) * 0.5f
+                val midY = top + topDip
+                val cp1X = startTopX + (midX - startTopX) * 0.5f
+                val cp1Y = top + topDip * 0.6f
+                val cp2X = midX - (midX - startTopX) * 0.5f
+                val cp2Y = midY
+                cubicTo(cp1X, cp1Y, cp2X, cp2Y, midX, midY)
 
-                val cp3X = midTopX + (endTopX - midTopX) * 0.45f
-                val cp3Y = midTopY
-                val cp4X = endTopX - (endTopX - midTopX) * 0.55f
-                val cp4Y = endTopY + topEdgeDip * 0.70f
+                val cp3X = midX + (endTopX - midX) * 0.5f
+                val cp3Y = midY
+                val cp4X = endTopX - (endTopX - midX) * 0.5f
+                val cp4Y = top + topDip * 0.6f
                 cubicTo(cp3X, cp3Y, cp4X, cp4Y, endTopX, endTopY)
             } else {
                 lineTo(endTopX, endTopY)
@@ -275,85 +227,57 @@ class OriginOSFluidMorphShape(
 
             // --- 2. Top-Right Corner ---
             cubicTo(
-                endTopX + K_tr, endTopY,
-                trX, trY + trRadius - K_tr,
-                trX, trY + trRadius
+                endTopX + K, endTopY,
+                right, top + r - K,
+                right, top + r
             )
 
-            // --- 3. Right Flank ---
-            val rfStartX = trX
-            val rfStartY = trY + trRadius
-            val rfEndX = brX
-            val rfEndY = brY - brRadius
-            if (rightWaist > 0.5f && rfEndY > rfStartY) {
-                val rfSpan = rfEndY - rfStartY
-                val cp1X = trX - rightWaist * 0.8f
-                val cp1Y = rfStartY + rfSpan * 0.35f
-                val cp2X = brX - rightWaist * 0.2f
-                val cp2Y = rfStartY + rfSpan * 0.75f
-                cubicTo(cp1X, cp1Y, cp2X, cp2Y, rfEndX, rfEndY)
-            } else {
-                lineTo(rfEndX, rfEndY)
-            }
+            // --- 3. Right Edge ---
+            lineTo(right, bottom - r)
 
             // --- 4. Bottom-Right Corner ---
             cubicTo(
-                brX, brY - brRadius + K_br,
-                brX - brRadius + K_br, brY,
-                brX - brRadius, brY
+                right, bottom - r + K,
+                right - r + K, bottom,
+                right - r, bottom
             )
 
-            // --- 5. Bottom Edge: viscous droplet sag ---
-            val startBotX = brX - brRadius
-            val startBotY = brY
-            val endBotX = blX + blRadius
-            val endBotY = blY
-            if (botSag > 0.5f && startBotX > endBotX) {
-                val midBotX = (startBotX + endBotX) * 0.5f
-                val midBotY = (startBotY + endBotY) * 0.5f + botSag
-                val bCp1X = startBotX - (startBotX - midBotX) * 0.5f
-                val bCp1Y = startBotY + botSag * 0.75f
-                val bCp2X = midBotX + (startBotX - midBotX) * 0.5f
-                val bCp2Y = midBotY
-                cubicTo(bCp1X, bCp1Y, bCp2X, bCp2Y, midBotX, midBotY)
+            // --- 5. Bottom Edge with viscous droplet sag ---
+            val startBotX = right - r
+            val endBotX = left + r
+            if (botSag > 0.5f && startBotX > endBotX + 1f) {
+                val midX = (startBotX + endBotX) * 0.5f
+                val midY = bottom + botSag
+                val cp1X = startBotX - (startBotX - midX) * 0.5f
+                val cp1Y = bottom + botSag * 0.6f
+                val cp2X = midX + (startBotX - midX) * 0.5f
+                val cp2Y = midY
+                cubicTo(cp1X, cp1Y, cp2X, cp2Y, midX, midY)
 
-                val bCp3X = midBotX - (midBotX - endBotX) * 0.5f
-                val bCp3Y = midBotY
-                val bCp4X = endBotX + (midBotX - endBotX) * 0.5f
-                val bCp4Y = endBotY + botSag * 0.75f
-                cubicTo(bCp3X, bCp3Y, bCp4X, bCp4Y, endBotX, endBotY)
+                val cp3X = midX - (midX - endBotX) * 0.5f
+                val cp3Y = midY
+                val cp4X = endBotX + (midX - endBotX) * 0.5f
+                val cp4Y = bottom + botSag * 0.6f
+                cubicTo(cp3X, cp3Y, cp4X, cp4Y, endBotX, bottom)
             } else {
-                lineTo(endBotX, endBotY)
+                lineTo(endBotX, bottom)
             }
 
             // --- 6. Bottom-Left Corner ---
             cubicTo(
-                blX + blRadius - K_bl, blY,
-                blX, blY - blRadius + K_bl,
-                blX, blY - blRadius
+                endBotX - K, bottom,
+                left, bottom - r + K,
+                left, bottom - r
             )
 
-            // --- 7. Left Flank: organic bell bulge & waist ---
-            val lfStartX = blX
-            val lfStartY = blY - blRadius
-            val lfEndX = tlX
-            val lfEndY = tlY + tlRadius
-            if ((leftWaist > 0.5f || leftBulge > 0.5f) && lfStartY > lfEndY) {
-                val lfSpan = lfStartY - lfEndY
-                val cp1X = blX - leftBulge * 0.6f
-                val cp1Y = lfStartY - lfSpan * 0.35f
-                val cp2X = tlX + leftWaist * 0.7f
-                val cp2Y = lfStartY - lfSpan * 0.75f
-                cubicTo(cp1X, cp1Y, cp2X, cp2Y, lfEndX, lfEndY)
-            } else {
-                lineTo(lfEndX, lfEndY)
-            }
+            // --- 7. Left Edge ---
+            lineTo(left, top + r)
 
             // --- 8. Top-Left Corner ---
             cubicTo(
-                tlX, tlY + tlRadius - K_tl,
-                tlX + tlRadius - K_tl, tlY,
-                tlX + tlRadius, tlY
+                left, top + r - K,
+                left + r - K, top,
+                left + r, top
             )
 
             close()
@@ -377,7 +301,8 @@ data class OriginOSMenuItem(
  * - Liquid Glass Backdrop Mode (with blur, lens, vibrancy, highlight)
  * - 100% Solid Opaque Mode (crisp opaque card with realistic shadow)
  * - Symmetrical, synchronized open & close speeds with user-controlled multipliers
- * - Frame-by-frame 26-checkpoint fluid morphing for all 4 edges & all 4 corners
+ * - "Suck & Spit" physical fluid suction and ejection
+ * - Single impact recoil overshoot and settle
  */
 @Composable
 fun OriginOSDropdownMenu(
@@ -419,19 +344,16 @@ fun OriginOSDropdownMenu(
                     targetValue = 0f,
                     animationSpec = tween(durationMillis = totalDuration, easing = LinearEasing)
                 )
-                // Impact absorption bounce on collapsed 3-item pill:
-                // Moves up by -5.5dp, rebounds to +1.8dp, -0.6dp, and settles at 0dp
-                pillBounceY.animateTo(-5.5f, tween(70, easing = androidx.compose.animation.core.FastOutLinearInEasing))
-                pillBounceY.animateTo(1.8f, tween(90, easing = androidx.compose.animation.core.LinearOutSlowInEasing))
-                pillBounceY.animateTo(-0.6f, tween(60, easing = androidx.compose.animation.core.FastOutSlowInEasing))
-                pillBounceY.animateTo(0f, tween(50, easing = androidx.compose.animation.core.FastOutSlowInEasing))
+                // Single impact recoil overshoot and settle:
+                pillBounceY.animateTo(-4.5f, tween(90, easing = androidx.compose.animation.core.FastOutLinearInEasing))
+                pillBounceY.animateTo(0f, tween(140, easing = androidx.compose.animation.core.FastOutSlowInEasing))
             }
         }
     }
 
     val p = animProgress.value
     val checkpoint = remember(p) {
-        interpolateCheckpoint(p)
+        interpolateSuckSpitCheckpoint(p)
     }
 
     val extraPadding = 36.dp
