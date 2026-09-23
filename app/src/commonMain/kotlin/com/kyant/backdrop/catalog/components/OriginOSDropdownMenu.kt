@@ -63,6 +63,8 @@ import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.effects.vibrancy
+import com.kyant.backdrop.highlight.Highlight
+import com.kyant.backdrop.shadow.Shadow
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlin.math.PI
@@ -460,22 +462,25 @@ fun OriginOSDropdownMenu(
                 Box(
                     modifier = Modifier
                         .matchParentSize()
-                        .clip(liquidShape)
-                        .drawBackdrop(backdrop) {
-                            lens(
-                                cornerRadii = floatArrayOf(
-                                    targetRadiusPx, targetRadiusPx,
-                                    targetRadiusPx, targetRadiusPx
-                                ),
-                                refractionHeight = 16f,
-                                refractionAmount = 18f
-                            )
-                            blur(radius = 24.dp)
-                            vibrancy()
-                        }
-                        .background(
-                            if (isLightTheme) Color.White.copy(alpha = 0.82f)
-                            else Color(0xFF202022).copy(alpha = 0.86f)
+                        .drawBackdrop(
+                            backdrop = backdrop,
+                            shape = { liquidShape },
+                            effects = {
+                                vibrancy()
+                                blur(24f.dp.toPx())
+                                lens(
+                                    16f.dp.toPx(),
+                                    18f.dp.toPx()
+                                )
+                            },
+                            highlight = { Highlight.Default },
+                            shadow = { Shadow(radius = 16.dp, color = Color.Black.copy(alpha = 0.12f)) },
+                            onDrawSurface = {
+                                drawRect(
+                                    if (isLightTheme) Color.White.copy(alpha = 0.82f)
+                                    else Color(0xFF202022).copy(alpha = 0.86f)
+                                )
+                            }
                         )
                 ) {
                     // Specular inner highlight rim

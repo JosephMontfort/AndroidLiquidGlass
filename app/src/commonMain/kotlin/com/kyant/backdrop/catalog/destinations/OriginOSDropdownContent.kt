@@ -33,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
@@ -421,7 +422,8 @@ fun OriginOSDropdownContent() {
                             }
 
                             LiquidButton(
-                                onClick = { isMenuExpanded = !isMenuExpanded }
+                                onClick = { isMenuExpanded = !isMenuExpanded },
+                                backdrop = backdrop
                             ) {
                                 BasicText(
                                     text = if (isMenuExpanded) "Close" else "Open Menu",
@@ -448,8 +450,9 @@ fun OriginOSDropdownContent() {
                                 )
                             }
                             LiquidToggle(
-                                checked = isLiquidFusionEnabled,
-                                onCheckedChange = { isLiquidFusionEnabled = it }
+                                selected = { isLiquidFusionEnabled },
+                                onSelect = { isLiquidFusionEnabled = it },
+                                backdrop = backdrop
                             )
                         }
 
@@ -469,9 +472,11 @@ fun OriginOSDropdownContent() {
                                 )
                             }
                             LiquidSlider(
-                                value = animationSpeed,
+                                value = { animationSpeed },
                                 onValueChange = { animationSpeed = it },
-                                valueRange = 0.1f..1.0f
+                                valueRange = 0.1f..1.0f,
+                                visibilityThreshold = 0.001f,
+                                backdrop = backdrop
                             )
                         }
 
