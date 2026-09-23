@@ -77,8 +77,10 @@ import kotlin.math.abs
  *    right neck (14dp).
  * 3. Viscous Droplet Sag: Bottom edge sags downward (+22dp) under fluid momentum.
  * 4. Convex Dome Arch: Top edge rebounds upward into a wide dome arch (-15dp).
- * 5. Squircle Settling: Corners expand to 24dp, dome flattens, settling into 210x224dp card.
- * 6. Asymmetrical Closing: Retracts via hanging droplet neck underneath the anchored pill.
+ * 5. Converging Bubble Pathway: Wide pill (132x44dp) contracts horizontally into
+ *    a near-circle bubble (92x96dp, radius 40dp) mid-flight while top edge plunges (+55.8dp).
+ * 6. Symmetric Reversal During Flight: Closing trajectory is the exact reverse of opening.
+ * 7. Post-Closing Impact Bounce: Collapsed pill absorbs closing momentum with spring rebound.
  */
 data class OriginOSMorphCheckpoint(
     val progress: Float,
@@ -99,75 +101,45 @@ data class OriginOSMorphCheckpoint(
     val rightWaist: Float  // concave neck indentation on right flank
 )
 
-val CHECKPOINTS_OPENING_26 = listOf(
+val CHECKPOINTS_CONVERGING_26 = listOf(
     OriginOSMorphCheckpoint(0.000f, 132.00f, 44.00f, 0.00f, 0.00f, 22.00f, 0.00f, 0.00f, 22.00f, 22.00f, 22.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f),
-    OriginOSMorphCheckpoint(0.040f, 127.20f, 58.28f, -0.48f, 0.70f, 21.87f, 0.38f, 0.67f, 21.88f, 22.30f, 22.30f, 3.86f, 0.98f, 0.89f, 0.80f, 0.62f),
-    OriginOSMorphCheckpoint(0.080f, 122.40f, 72.47f, -1.63f, 2.41f, 21.42f, 1.31f, 2.29f, 21.47f, 22.78f, 22.78f, 7.42f, 2.73f, 2.48f, 2.23f, 1.74f),
-    OriginOSMorphCheckpoint(0.120f, 124.92f, 86.49f, -3.31f, 4.88f, 20.75f, 2.65f, 4.63f, 20.83f, 23.36f, 23.36f, 10.40f, 4.91f, 4.47f, 4.02f, 3.13f),
-    OriginOSMorphCheckpoint(0.160f, 134.70f, 100.24f, -5.37f, 7.92f, 19.90f, 4.30f, 7.52f, 20.04f, 23.99f, 23.99f, 12.58f, 7.36f, 6.69f, 6.02f, 4.68f),
-    OriginOSMorphCheckpoint(0.200f, 144.33f, 113.65f, -7.68f, 11.33f, 18.94f, 6.15f, 10.76f, 19.13f, 24.65f, 24.65f, 13.79f, 9.91f, 9.01f, 8.11f, 6.31f),
-    OriginOSMorphCheckpoint(0.240f, 153.69f, 126.63f, -10.11f, 14.91f, 17.93f, 8.09f, 14.15f, 18.18f, 25.31f, 25.31f, 13.92f, 12.46f, 11.33f, 10.19f, 7.93f),
-    OriginOSMorphCheckpoint(0.280f, 162.68f, 139.09f, -12.51f, 18.45f, 16.93f, 10.01f, 17.51f, 17.24f, 25.94f, 25.94f, 12.98f, 14.88f, 13.53f, 12.17f, 9.47f),
-    OriginOSMorphCheckpoint(0.320f, 171.20f, 150.98f, -14.75f, 21.75f, 16.00f, 11.80f, 20.65f, 16.37f, 26.52f, 26.52f, 11.03f, 17.07f, 15.52f, 13.96f, 10.86f),
-    OriginOSMorphCheckpoint(0.360f, 179.16f, 162.20f, -16.71f, 24.64f, 15.20f, 13.36f, 23.39f, 15.62f, 27.02f, 27.02f, 8.23f, 18.94f, 17.21f, 15.49f, 12.05f),
-    OriginOSMorphCheckpoint(0.400f, 186.47f, 172.69f, -18.27f, 26.95f, 14.58f, 14.62f, 25.58f, 15.03f, 27.44f, 27.44f, 4.79f, 20.40f, 18.55f, 16.69f, 12.98f),
-    OriginOSMorphCheckpoint(0.440f, 193.05f, 182.39f, -19.37f, 28.57f, 14.16f, 15.49f, 27.11f, 14.65f, 27.75f, 27.75f, 0.98f, 21.42f, 19.47f, 17.52f, 13.63f),
-    OriginOSMorphCheckpoint(0.480f, 198.84f, 191.24f, -19.93f, 29.40f, 13.99f, 15.94f, 27.90f, 14.49f, 27.95f, 27.95f, -2.56f, 21.93f, 19.94f, 17.95f, 13.96f),
-    OriginOSMorphCheckpoint(0.520f, 203.75f, 199.18f, -19.93f, 29.40f, 14.07f, 15.94f, 27.90f, 14.57f, 28.03f, 28.03f, -5.84f, 21.93f, 19.94f, 17.95f, 13.96f),
-    OriginOSMorphCheckpoint(0.560f, 207.76f, 206.16f, -19.37f, 28.57f, 14.40f, 15.49f, 27.11f, 14.89f, 27.99f, 27.99f, -8.82f, 21.42f, 19.47f, 17.52f, 13.63f),
-    OriginOSMorphCheckpoint(0.600f, 210.80f, 212.15f, -18.27f, 26.95f, 14.98f, 14.62f, 25.58f, 15.43f, 27.84f, 27.84f, -11.34f, 20.40f, 18.55f, 16.69f, 12.98f),
-    OriginOSMorphCheckpoint(0.640f, 212.84f, 217.09f, -16.71f, 24.64f, 15.76f, 13.36f, 23.39f, 16.18f, 27.58f, 27.58f, -13.27f, 18.94f, 17.21f, 15.49f, 12.05f),
-    OriginOSMorphCheckpoint(0.680f, 213.87f, 220.97f, -14.75f, 21.75f, 16.72f, 11.80f, 20.65f, 17.09f, 27.24f, 27.24f, -14.51f, 17.07f, 15.52f, 13.96f, 10.86f),
-    OriginOSMorphCheckpoint(0.720f, 213.73f, 223.76f, -12.51f, 18.45f, 17.81f, 10.01f, 17.51f, 18.12f, 26.82f, 26.82f, -14.99f, 14.88f, 13.53f, 12.17f, 9.47f),
-    OriginOSMorphCheckpoint(0.760f, 213.20f, 225.44f, -10.11f, 14.91f, 18.97f, 8.09f, 14.15f, 19.22f, 26.35f, 26.35f, -14.70f, 12.46f, 11.33f, 10.19f, 7.93f),
-    OriginOSMorphCheckpoint(0.800f, 212.67f, 226.00f, -7.68f, 11.33f, 20.14f, 6.15f, 10.76f, 20.33f, 25.85f, 25.85f, -13.64f, 9.91f, 9.01f, 8.11f, 6.31f),
-    OriginOSMorphCheckpoint(0.840f, 212.13f, 225.60f, -5.37f, 7.92f, 21.26f, 4.30f, 7.52f, 21.40f, 25.35f, 25.35f, -11.88f, 7.36f, 6.69f, 6.02f, 4.68f),
-    OriginOSMorphCheckpoint(0.880f, 211.60f, 225.20f, -3.31f, 4.88f, 22.27f, 2.65f, 4.63f, 22.35f, 24.88f, 24.88f, -9.50f, 4.91f, 4.47f, 4.02f, 3.13f),
-    OriginOSMorphCheckpoint(0.920f, 211.07f, 224.80f, -1.63f, 2.41f, 23.10f, 1.31f, 2.29f, 23.15f, 24.46f, 24.46f, -6.62f, 2.73f, 2.48f, 2.23f, 1.74f),
-    OriginOSMorphCheckpoint(0.960f, 210.53f, 224.40f, -0.48f, 0.70f, 23.71f, 0.38f, 0.67f, 23.72f, 24.14f, 24.14f, -3.40f, 0.98f, 0.89f, 0.80f, 0.62f),
+    OriginOSMorphCheckpoint(0.040f, 130.88f, 45.46f, -0.58f, 2.02f, 22.50f, 0.58f, 1.95f, 22.50f, 22.56f, 22.56f, 3.38f, 0.43f, 0.50f, 0.25f, 0.43f),
+    OriginOSMorphCheckpoint(0.080f, 127.84f, 49.41f, -1.73f, 6.04f, 23.87f, 1.73f, 5.83f, 23.87f, 24.08f, 24.08f, 6.49f, 1.47f, 1.51f, 0.99f, 1.29f),
+    OriginOSMorphCheckpoint(0.120f, 123.36f, 55.23f, -3.23f, 11.32f, 25.89f, 3.23f, 10.91f, 25.89f, 26.32f, 26.32f, 9.07f, 2.98f, 2.83f, 2.17f, 2.43f),
+    OriginOSMorphCheckpoint(0.160f, 117.92f, 62.30f, -4.97f, 17.41f, 28.34f, 4.97f, 16.78f, 28.34f, 29.04f, 29.04f, 10.92f, 4.83f, 4.35f, 3.71f, 3.73f),
+    OriginOSMorphCheckpoint(0.200f, 112.00f, 70.00f, -6.84f, 23.93f, 31.00f, 6.84f, 23.08f, 31.00f, 32.00f, 32.00f, 11.88f, 6.92f, 5.98f, 5.53f, 5.13f),
+    OriginOSMorphCheckpoint(0.240f, 106.08f, 77.70f, -8.72f, 30.54f, 33.66f, 8.72f, 29.45f, 33.66f, 34.96f, 34.96f, 11.88f, 9.10f, 7.63f, 7.50f, 6.54f),
+    OriginOSMorphCheckpoint(0.280f, 100.64f, 84.77f, -10.54f, 36.90f, 36.11f, 10.54f, 35.58f, 36.11f, 37.68f, 37.68f, 10.92f, 11.26f, 9.23f, 9.50f, 7.91f),
+    OriginOSMorphCheckpoint(0.320f, 96.16f, 90.59f, -12.21f, 42.72f, 38.13f, 12.21f, 41.19f, 38.13f, 39.92f, 39.92f, 9.07f, 13.27f, 10.68f, 11.41f, 9.15f),
+    OriginOSMorphCheckpoint(0.360f, 93.12f, 94.54f, -13.63f, 47.72f, 39.50f, 13.63f, 46.01f, 39.50f, 41.44f, 41.44f, 6.49f, 15.03f, 11.93f, 13.10f, 10.23f),
+    OriginOSMorphCheckpoint(0.400f, 92.00f, 96.00f, -14.77f, 51.68f, 40.00f, 14.77f, 49.83f, 40.00f, 42.00f, 42.00f, 3.38f, 16.45f, 12.92f, 14.47f, 11.07f),
+    OriginOSMorphCheckpoint(0.440f, 93.50f, 97.63f, -15.55f, 54.42f, 39.80f, 15.55f, 52.48f, 39.80f, 41.77f, 41.77f, 0.00f, 17.43f, 13.61f, 15.44f, 11.66f),
+    OriginOSMorphCheckpoint(0.480f, 97.73f, 102.22f, -15.95f, 55.82f, 39.22f, 15.95f, 53.83f, 39.22f, 41.13f, 41.13f, -4.22f, 17.94f, 13.96f, 15.94f, 11.96f),
+    OriginOSMorphCheckpoint(0.520f, 104.27f, 109.31f, -15.95f, 55.82f, 38.34f, 15.95f, 53.83f, 38.34f, 40.13f, 40.13f, -8.05f, 17.94f, 13.96f, 15.94f, 11.96f),
+    OriginOSMorphCheckpoint(0.560f, 112.70f, 118.45f, -15.55f, 54.42f, 37.19f, 15.55f, 52.48f, 37.19f, 38.84f, 38.84f, -11.13f, 17.43f, 13.61f, 15.44f, 11.66f),
+    OriginOSMorphCheckpoint(0.600f, 122.59f, 129.19f, -14.77f, 51.68f, 35.85f, 14.77f, 49.83f, 35.85f, 37.33f, 37.33f, -13.18f, 16.45f, 12.92f, 14.47f, 11.07f),
+    OriginOSMorphCheckpoint(0.640f, 133.54f, 141.06f, -13.63f, 47.72f, 34.37f, 13.63f, 46.01f, 34.37f, 35.66f, 35.66f, -13.99f, 15.03f, 11.93f, 13.10f, 10.23f),
+    OriginOSMorphCheckpoint(0.680f, 145.11f, 153.61f, -12.21f, 42.72f, 32.80f, 12.21f, 41.19f, 32.80f, 33.90f, 33.90f, -13.50f, 13.27f, 10.68f, 11.41f, 9.15f),
+    OriginOSMorphCheckpoint(0.720f, 156.89f, 166.39f, -10.54f, 36.90f, 31.20f, 10.54f, 35.58f, 31.20f, 32.10f, 32.10f, -11.75f, 11.26f, 9.23f, 9.50f, 7.91f),
+    OriginOSMorphCheckpoint(0.760f, 168.46f, 178.94f, -8.72f, 30.54f, 29.63f, 8.72f, 29.45f, 29.63f, 30.34f, 30.34f, -8.91f, 9.10f, 7.63f, 7.50f, 6.54f),
+    OriginOSMorphCheckpoint(0.800f, 179.41f, 190.81f, -6.84f, 23.93f, 28.15f, 6.84f, 23.08f, 28.15f, 28.67f, 28.67f, -5.23f, 6.92f, 5.98f, 5.53f, 5.13f),
+    OriginOSMorphCheckpoint(0.840f, 189.30f, 201.55f, -4.97f, 17.41f, 26.81f, 4.97f, 16.78f, 26.81f, 27.16f, 27.16f, -1.07f, 4.83f, 4.35f, 3.71f, 3.73f),
+    OriginOSMorphCheckpoint(0.880f, 197.73f, 210.69f, -3.23f, 11.32f, 25.66f, 3.23f, 10.91f, 25.66f, 25.87f, 25.87f, 0.00f, 2.98f, 2.83f, 2.17f, 2.43f),
+    OriginOSMorphCheckpoint(0.920f, 204.27f, 217.78f, -1.73f, 6.04f, 24.78f, 1.73f, 5.83f, 24.78f, 24.87f, 24.87f, 0.00f, 1.47f, 1.51f, 0.99f, 1.29f),
+    OriginOSMorphCheckpoint(0.960f, 208.50f, 222.37f, -0.58f, 2.02f, 24.20f, 0.58f, 1.95f, 24.20f, 24.23f, 24.23f, 0.00f, 0.43f, 0.50f, 0.25f, 0.43f),
     OriginOSMorphCheckpoint(1.000f, 210.00f, 224.00f, 0.00f, 0.00f, 24.00f, 0.00f, 0.00f, 24.00f, 24.00f, 24.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f)
 )
 
-val CHECKPOINTS_CLOSING_26 = listOf(
-    OriginOSMorphCheckpoint(0.000f, 132.00f, 44.00f, 0.00f, 0.00f, 22.00f, 0.00f, 0.00f, 22.00f, 22.00f, 22.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f),
-    OriginOSMorphCheckpoint(0.040f, 133.19f, 45.04f, -0.14f, 0.11f, 22.08f, 0.10f, 0.10f, 22.08f, 22.18f, 22.18f, 0.05f, 0.62f, 0.43f, 0.29f, 0.33f),
-    OriginOSMorphCheckpoint(0.080f, 134.92f, 47.16f, -0.49f, 0.37f, 22.16f, 0.33f, 0.33f, 22.16f, 22.49f, 22.49f, 0.16f, 2.12f, 1.47f, 0.98f, 1.14f),
-    OriginOSMorphCheckpoint(0.120f, 136.95f, 50.05f, -0.99f, 0.74f, 22.24f, 0.66f, 0.66f, 22.24f, 22.90f, 22.90f, 0.33f, 4.30f, 2.98f, 1.99f, 2.32f),
-    OriginOSMorphCheckpoint(0.160f, 139.20f, 53.59f, -1.61f, 1.21f, 22.32f, 1.07f, 1.07f, 22.32f, 23.39f, 23.39f, 0.54f, 6.98f, 4.83f, 3.22f, 3.76f),
-    OriginOSMorphCheckpoint(0.200f, 141.63f, 57.71f, -2.31f, 1.73f, 22.40f, 1.54f, 1.54f, 22.40f, 23.94f, 23.94f, 0.77f, 9.99f, 6.92f, 4.61f, 5.38f),
-    OriginOSMorphCheckpoint(0.240f, 144.20f, 62.35f, -3.03f, 2.27f, 22.48f, 2.02f, 2.02f, 22.48f, 24.50f, 24.50f, 1.01f, 13.14f, 9.10f, 6.07f, 7.08f),
-    OriginOSMorphCheckpoint(0.280f, 146.91f, 67.48f, -3.75f, 2.81f, 22.56f, 2.50f, 2.50f, 22.56f, 25.06f, 25.06f, 1.25f, 16.26f, 11.26f, 7.51f, 8.76f),
-    OriginOSMorphCheckpoint(0.320f, 149.73f, 73.07f, -4.42f, 3.32f, 22.64f, 2.95f, 2.95f, 22.64f, 25.59f, 25.59f, 1.47f, 19.17f, 13.27f, 8.85f, 10.32f),
-    OriginOSMorphCheckpoint(0.360f, 152.67f, 79.10f, -5.01f, 3.76f, 22.72f, 3.34f, 3.34f, 22.72f, 26.06f, 26.06f, 1.67f, 21.72f, 15.03f, 10.02f, 11.69f),
-    OriginOSMorphCheckpoint(0.400f, 155.70f, 85.55f, -5.48f, 4.11f, 22.80f, 3.65f, 3.65f, 22.80f, 26.45f, 26.45f, 1.83f, 23.75f, 16.45f, 10.96f, 12.79f),
-    OriginOSMorphCheckpoint(0.440f, 158.83f, 92.39f, -5.81f, 4.36f, 22.88f, 3.87f, 3.87f, 22.88f, 26.75f, 26.75f, 1.94f, 25.18f, 17.43f, 11.62f, 13.56f),
-    OriginOSMorphCheckpoint(0.480f, 162.04f, 99.62f, -5.98f, 4.48f, 22.96f, 3.99f, 3.99f, 22.96f, 26.95f, 26.95f, 1.99f, 25.91f, 17.94f, 11.96f, 13.95f),
-    OriginOSMorphCheckpoint(0.520f, 165.33f, 107.22f, -5.98f, 4.48f, 23.04f, 3.99f, 3.99f, 23.04f, 27.03f, 27.03f, 1.99f, 25.91f, 17.94f, 11.96f, 13.95f),
-    OriginOSMorphCheckpoint(0.560f, 168.71f, 115.18f, -5.81f, 4.36f, 23.12f, 3.87f, 3.87f, 23.12f, 26.99f, 26.99f, 1.94f, 25.18f, 17.43f, 11.62f, 13.56f),
-    OriginOSMorphCheckpoint(0.600f, 172.15f, 123.49f, -5.48f, 4.11f, 23.20f, 3.65f, 3.65f, 23.20f, 26.85f, 26.85f, 1.83f, 23.75f, 16.45f, 10.96f, 12.79f),
-    OriginOSMorphCheckpoint(0.640f, 175.66f, 132.14f, -5.01f, 3.76f, 23.28f, 3.34f, 3.34f, 23.28f, 26.62f, 26.62f, 1.67f, 21.72f, 15.03f, 10.02f, 11.69f),
-    OriginOSMorphCheckpoint(0.680f, 179.25f, 141.12f, -4.42f, 3.32f, 23.36f, 2.95f, 2.95f, 23.36f, 26.31f, 26.31f, 1.47f, 19.17f, 13.27f, 8.85f, 10.32f),
-    OriginOSMorphCheckpoint(0.720f, 182.89f, 150.42f, -3.75f, 2.81f, 23.44f, 2.50f, 2.50f, 23.44f, 25.94f, 25.94f, 1.25f, 16.26f, 11.26f, 7.51f, 8.76f),
-    OriginOSMorphCheckpoint(0.760f, 186.59f, 160.03f, -3.03f, 2.27f, 23.52f, 2.02f, 2.02f, 23.52f, 25.54f, 25.54f, 1.01f, 13.14f, 9.10f, 6.07f, 7.08f),
-    OriginOSMorphCheckpoint(0.800f, 190.36f, 169.96f, -2.31f, 1.73f, 23.60f, 1.54f, 1.54f, 23.60f, 25.14f, 25.14f, 0.77f, 9.99f, 6.92f, 4.61f, 5.38f),
-    OriginOSMorphCheckpoint(0.840f, 194.18f, 180.18f, -1.61f, 1.21f, 23.68f, 1.07f, 1.07f, 23.68f, 24.75f, 24.75f, 0.54f, 6.98f, 4.83f, 3.22f, 3.76f),
-    OriginOSMorphCheckpoint(0.880f, 198.06f, 190.70f, -0.99f, 0.74f, 23.76f, 0.66f, 0.66f, 23.76f, 24.42f, 24.42f, 0.33f, 4.30f, 2.98f, 1.99f, 2.32f),
-    OriginOSMorphCheckpoint(0.920f, 201.99f, 201.52f, -0.49f, 0.37f, 23.84f, 0.33f, 0.33f, 23.84f, 24.17f, 24.17f, 0.16f, 2.12f, 1.47f, 0.98f, 1.14f),
-    OriginOSMorphCheckpoint(0.960f, 205.97f, 212.62f, -0.14f, 0.11f, 23.92f, 0.10f, 0.10f, 23.92f, 24.02f, 24.02f, 0.05f, 0.62f, 0.43f, 0.29f, 0.33f),
-    OriginOSMorphCheckpoint(1.000f, 210.00f, 224.00f, 0.00f, 0.00f, 24.00f, 0.00f, 0.00f, 24.00f, 24.00f, 24.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f)
-)
-
-fun interpolateCheckpoint(p: Float, isExpanding: Boolean): OriginOSMorphCheckpoint {
-    val table = if (isExpanding) CHECKPOINTS_OPENING_26 else CHECKPOINTS_CLOSING_26
-    val clampedP = p.fastCoerceIn(0f, 1f)
-    val floatIndex = clampedP * 25f
+fun interpolateCheckpoint(progress: Float): OriginOSMorphCheckpoint {
+    val p = progress.fastCoerceIn(0f, 1f)
+    val floatIndex = p * 25f
     val index1 = floatIndex.toInt().coerceIn(0, 24)
     val index2 = (index1 + 1).coerceIn(0, 25)
     val fraction = floatIndex - index1
-    val c1 = table[index1]
-    val c2 = table[index2]
+    val c1 = CHECKPOINTS_CONVERGING_26[index1]
+    val c2 = CHECKPOINTS_CONVERGING_26[index2]
     return OriginOSMorphCheckpoint(
-        progress = clampedP,
+        progress = p,
         width = lerp(c1.width, c2.width, fraction),
         height = lerp(c1.height, c2.height, fraction),
         trOffsetX = lerp(c1.trOffsetX, c2.trOffsetX, fraction),
@@ -236,11 +208,31 @@ class OriginOSFluidMorphShape(
         val brX = anchorRight
         val brY = anchorTop + targetH
 
-        // Corner Radii
-        val trRadius = cp.trRadius * d
-        val tlRadius = cp.tlRadius * d
-        val brRadius = cp.brRadius * d
-        val blRadius = cp.blRadius * d
+        // Corner Radii with Proportional Clamping to form seamless near-circle/bubble
+        val rawTrRadius = cp.trRadius * d
+        val rawTlRadius = cp.tlRadius * d
+        val rawBrRadius = cp.brRadius * d
+        val rawBlRadius = cp.blRadius * d
+
+        val topSpan = (trX - tlX).coerceAtLeast(1f)
+        val topScale = (topSpan / (rawTlRadius + rawTrRadius)).coerceAtMost(1f)
+        val effTlR = rawTlRadius * topScale
+        val effTrR = rawTrRadius * topScale
+
+        val botSpan = (brX - blX).coerceAtLeast(1f)
+        val botScale = (botSpan / (rawBlRadius + rawBrRadius)).coerceAtMost(1f)
+        val effBlR = rawBlRadius * botScale
+        val effBrR = rawBrRadius * botScale
+
+        val rightSpan = (brY - trY).coerceAtLeast(1f)
+        val rightScale = (rightSpan / (effTrR + effBrR)).coerceAtMost(1f)
+        val trRadius = effTrR * rightScale
+        val brRadius = effBrR * rightScale
+
+        val leftSpan = (blY - tlY).coerceAtLeast(1f)
+        val leftScale = (leftSpan / (effTlR + effBlR)).coerceAtMost(1f)
+        val tlRadius = effTlR * leftScale
+        val blRadius = effBlR * leftScale
 
         // Dynamic Curvatures
         val topEdgeDip = cp.topEdgeDip * d
@@ -263,7 +255,7 @@ class OriginOSFluidMorphShape(
             moveTo(startTopX, startTopY)
 
             // --- 1. Top Edge: dynamic curvature (plunge dip vs rising dome arch) ---
-            if (abs(topEdgeDip) > 0.5f && endTopX > startTopX) {
+            if (abs(topEdgeDip) > 0.5f && endTopX > startTopX + 1f) {
                 val midTopX = (startTopX + endTopX) * 0.5f
                 val midTopY = (startTopY + endTopY) * 0.5f + topEdgeDip
                 val cp1X = startTopX + (midTopX - startTopX) * 0.55f
@@ -404,6 +396,7 @@ fun OriginOSDropdownMenu(
     val textPrimary = if (isLightTheme) Color(0xFF161616) else Color(0xFFEEEEEE)
 
     val animProgress = remember { Animatable(0f) }
+    val pillBounceY = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
     var runningJob by remember { mutableStateOf<Job?>(null) }
 
@@ -415,22 +408,30 @@ fun OriginOSDropdownMenu(
         runningJob?.cancel()
         runningJob = scope.launch {
             if (isExpanded) {
+                pillBounceY.snapTo(0f)
                 animProgress.animateTo(
                     targetValue = 1f,
                     animationSpec = tween(durationMillis = totalDuration, easing = LinearEasing)
                 )
             } else {
+                // Exact reverse during flight: 1.0f -> 0.0f
                 animProgress.animateTo(
                     targetValue = 0f,
                     animationSpec = tween(durationMillis = totalDuration, easing = LinearEasing)
                 )
+                // Impact absorption bounce on collapsed 3-item pill:
+                // Moves up by -5.5dp, rebounds to +1.8dp, -0.6dp, and settles at 0dp
+                pillBounceY.animateTo(-5.5f, tween(70, easing = androidx.compose.animation.core.FastOutLinearInEasing))
+                pillBounceY.animateTo(1.8f, tween(90, easing = androidx.compose.animation.core.LinearOutSlowInEasing))
+                pillBounceY.animateTo(-0.6f, tween(60, easing = androidx.compose.animation.core.FastOutSlowInEasing))
+                pillBounceY.animateTo(0f, tween(50, easing = androidx.compose.animation.core.FastOutSlowInEasing))
             }
         }
     }
 
     val p = animProgress.value
-    val checkpoint = remember(p, isExpanded) {
-        interpolateCheckpoint(p, isExpanding = isExpanded)
+    val checkpoint = remember(p) {
+        interpolateCheckpoint(p)
     }
 
     val extraPadding = 36.dp
@@ -449,13 +450,15 @@ fun OriginOSDropdownMenu(
     val targetWidth = 210.dp
     val targetHeight = 224.dp
 
-    // Canvas size encompassing shadow, dome arch, and droplet sag bounds
+    // Canvas size encompassing shadow, dome arch, plunge dip, and droplet sag bounds
     val canvasWidth = targetWidth + extraPadding * 2
-    val canvasHeight = targetHeight + extraPadding * 2 + 40.dp
+    val canvasHeight = targetHeight + extraPadding * 2 + 60.dp
 
-    // Fixed root layout bounds: exactly matches the pill at all times, preventing any screen shift!
+    // Fixed root layout bounds with impact bounce offset
     Box(
-        modifier = modifier.size(pillWidth, pillHeight)
+        modifier = modifier
+            .offset(y = pillBounceY.value.dp)
+            .size(pillWidth, pillHeight)
     ) {
         // Unbounded child positioned so that (anchorRight, anchorTop) aligns exactly with (pillWidth, 0.dp)
         Box(

@@ -466,27 +466,27 @@ fun OriginOSDropdownContent() {
                                     style = TextStyle(textSecondary, 11.sp, FontWeight.Bold)
                                 )
                                 BasicText(
-                                    text = "• 26 Checkpoints: Frame-by-frame dual trajectory measured from OriginOS 7",
+                                    text = "• 26 Checkpoints: Converging bubble trajectory measured from OriginOS 7",
                                     style = TextStyle(textPrimary, 11.sp, fontFamily = FontFamily.Monospace)
                                 )
                                 BasicText(
-                                    text = "• Plunging Top Edge: Top-left & top-right corners drop +28dp..+29.5dp with +14dp dip",
+                                    text = "• Converging Bubble Flight: Pill (132x44dp) contracts to 92x96dp circular orb (r=40dp)",
                                     style = TextStyle(textPrimary, 11.sp, fontFamily = FontFamily.Monospace)
                                 )
                                 BasicText(
-                                    text = "• Rising Dome Arch: Upper boundary rebounds into -15dp expansive dome before squircle settling",
+                                    text = "• Plunging Top Edge: Top corners & edge plunge +55.8dp downward into bubble center",
                                     style = TextStyle(textPrimary, 11.sp, fontFamily = FontFamily.Monospace)
                                 )
                                 BasicText(
-                                    text = "• Organic Contour: Droplet sag (+22dp), left waist (20dp) & bell belly bulge (18dp)",
+                                    text = "• Rising Dome Arch: Upper boundary rebounds into -14dp expansive dome before squircle settling",
                                     style = TextStyle(textPrimary, 11.sp, fontFamily = FontFamily.Monospace)
                                 )
                                 BasicText(
-                                    text = "• Topmost Layer: Elevated above album cover art and scrollable elements",
+                                    text = "• Exact Flight Reversal: Closing trajectory is the exact mathematical reverse of opening",
                                     style = TextStyle(textPrimary, 11.sp, fontFamily = FontFamily.Monospace)
                                 )
                                 BasicText(
-                                    text = "• Zero Layout Shift: Anchored pill container with invariant measured bounds (132x44dp)",
+                                    text = "• Impact Absorption Bounce: Collapsed pill bounces upward (-5.5dp -> +1.8dp -> 0dp)",
                                     style = TextStyle(textPrimary, 11.sp, fontFamily = FontFamily.Monospace)
                                 )
                             }
