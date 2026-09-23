@@ -31,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -57,6 +58,7 @@ import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.effects.vibrancy
 import com.kyant.backdrop.highlight.Highlight
+import com.kyant.backdrop.shadow.InnerShadow
 import com.kyant.backdrop.shadow.Shadow
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -66,17 +68,6 @@ import kotlinx.coroutines.launch
  *
  * Meticulously reconstructed from frame-by-frame analysis of the OriginOS 7 Gallery
  * dropdown animation (60 frames at 30fps).
- *
- * Key physics behaviors captured across the 26 checkpoints:
- * 1. Surface Tension Necking: The top-right corner does NOT stay static. Under elastic
- *    surface tension, it dynamically pulls inward (-20dp) and downward (+12dp), tightening
- *    its corner radius to ~12dp.
- * 2. Bilateral Waist Indentation: Left concave neck (peaks at 28dp) and right waist (peaks at 14dp).
- * 3. Convex Dome Arch: Top edge arches upward (peaks at 15dp) into an organic fluid dome.
- * 4. Viscous Droplet Sag: Bottom edge sags downward (peaks at 18dp) as droplet mass accelerates.
- * 5. Squircle Settling: As momentum balances, the dome flattens, waists straighten, and the
- *    top-right corner smoothly returns to the exact initial margin, settling into the final
- *    24dp squircle card.
  */
 data class OriginOSMorphCheckpoint(
     val progress: Float,
@@ -338,10 +329,11 @@ data class OriginOSMenuItem(
 /**
  * 1:1 OriginOS 7 Morphing Dropdown Menu.
  *
- * Guaranteed ZERO LAYOUT SHIFT: The measured layout bounds in the parent Row are permanently
- * fixed at (132.dp, 44.dp). The Top Bar, "Albums" header, and screen elements will NEVER move.
- *
- * The pill itself is the container that morphs into the dropdown menu across all 26 checkpoints.
+ * Sits on the TOPMOST visual layer.
+ * Supports:
+ * - Liquid Glass Backdrop Mode (with blur, lens, vibrancy, highlight)
+ * - 100% Solid Opaque Mode (crisp opaque card with realistic shadow)
+ * - Symmetrical, synchronized open & close speeds with user-controlled multipliers
  */
 @Composable
 fun OriginOSDropdownMenu(
@@ -349,6 +341,7 @@ fun OriginOSDropdownMenu(
     onDismissRequest: () -> Unit,
     backdrop: Backdrop,
     modifier: Modifier = Modifier,
+    isGlassEnabled: Boolean = true,
     isLiquidFusionEnabled: Boolean = true,
     animationSpeedMultiplier: Float = 1.0f,
     menuItems: List<OriginOSMenuItem> = defaultOriginOSMenuItems(),
@@ -362,17 +355,19 @@ fun OriginOSDropdownMenu(
     val scope = rememberCoroutineScope()
     var runningJob by remember { mutableStateOf<Job?>(null) }
 
+    // Synchronize opening and closing durations symmetrically:
+    val baseDuration = 340f
+    val totalDuration = (baseDuration / animationSpeedMultiplier).toInt().coerceAtLeast(16)
+
     LaunchedEffect(isExpanded, animationSpeedMultiplier) {
         runningJob?.cancel()
         runningJob = scope.launch {
             if (isExpanded) {
-                val totalDuration = (680f / animationSpeedMultiplier).toInt().coerceAtLeast(50)
                 animProgress.animateTo(
                     targetValue = 1f,
                     animationSpec = tween(durationMillis = totalDuration, easing = LinearEasing)
                 )
             } else {
-                val totalDuration = (320f / animationSpeedMultiplier).toInt().coerceAtLeast(50)
                 animProgress.animateTo(
                     targetValue = 0f,
                     animationSpec = tween(durationMillis = totalDuration, easing = LinearEasing)
@@ -418,30 +413,48 @@ fun OriginOSDropdownMenu(
                 )
                 .size(canvasWidth, canvasHeight)
         ) {
-            // 1. Frosted Liquid Glass & Fluid Morph Contour Canvas
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .drawBackdrop(
-                        backdrop = backdrop,
-                        shape = { morphShape },
-                        effects = {
-                            vibrancy()
-                            blur(24f.dp.toPx())
-                            lens(16f.dp.toPx(), 18f.dp.toPx())
-                        },
-                        highlight = { Highlight.Default },
-                        shadow = { Shadow(radius = 16.dp, color = Color.Black.copy(alpha = 0.12f)) },
-                        onDrawSurface = {
-                            drawRect(
-                                if (isLightTheme) Color.White.copy(alpha = 0.90f)
-                                else Color(0xFF222224).copy(alpha = 0.92f)
-                            )
-                        }
-                    )
-            )
+            // --- 1. CONTOUR SURFACE CANVAS (Glass vs Opaque) ---
+            if (isGlassEnabled) {
+                // Liquid Glass Backdrop Mode
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .drawBackdrop(
+                            backdrop = backdrop,
+                            shape = { morphShape },
+                            effects = {
+                                vibrancy()
+                                blur(18f.dp.toPx())
+                                lens(14f.dp.toPx(), 22f.dp.toPx(), depthEffect = true)
+                            },
+                            highlight = { Highlight.Default.copy(alpha = 0.70f) },
+                            shadow = { Shadow(radius = 18.dp, color = Color.Black.copy(alpha = 0.16f)) },
+                            innerShadow = { InnerShadow(radius = 10.dp, color = Color.White.copy(alpha = 0.35f)) },
+                            onDrawSurface = {
+                                drawRect(
+                                    if (isLightTheme) Color.White.copy(alpha = 0.72f)
+                                    else Color(0xFF222224).copy(alpha = 0.78f)
+                                )
+                            }
+                        )
+                )
+            } else {
+                // 100% Solid Opaque Mode (Crisp shadow, zero transparency)
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .shadow(
+                            elevation = 14.dp,
+                            shape = morphShape,
+                            ambientColor = Color.Black.copy(alpha = 0.14f),
+                            spotColor = Color.Black.copy(alpha = 0.20f)
+                        )
+                        .clip(morphShape)
+                        .background(if (isLightTheme) Color.White else Color(0xFF242426))
+                )
+            }
 
-            // 2. Action Pill Content (Search | + | ⋮)
+            // --- 2. Action Pill Content (Search | + | ⋮) ---
             val pillAlpha = (1f - p / 0.12f).fastCoerceIn(0f, 1f)
             if (pillAlpha > 0.01f) {
                 Box(
@@ -497,8 +510,8 @@ fun OriginOSDropdownMenu(
                 }
             }
 
-            // 3. Dropdown Menu Items Content
-            val menuAlpha = ((p - 0.22f) / 0.35f).fastCoerceIn(0f, 1f)
+            // --- 3. Dropdown Menu Items Content ---
+            val menuAlpha = ((p - 0.20f) / 0.35f).fastCoerceIn(0f, 1f)
             if (menuAlpha > 0.01f) {
                 Column(
                     modifier = Modifier
@@ -515,7 +528,7 @@ fun OriginOSDropdownMenu(
                         val itemSlideY = lerp(
                             14f,
                             0f,
-                            ((p - 0.22f - index * 0.035f) / 0.30f).fastCoerceIn(0f, 1f)
+                            ((p - 0.20f - index * 0.035f) / 0.30f).fastCoerceIn(0f, 1f)
                         )
 
                         Box(
