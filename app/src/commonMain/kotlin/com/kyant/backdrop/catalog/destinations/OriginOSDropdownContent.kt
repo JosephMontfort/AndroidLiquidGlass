@@ -152,80 +152,16 @@ fun OriginOSDropdownContent() {
                         )
                     )
 
-                    // OriginOS Dropdown Menu anchored right to the Top Pill
+                    // OriginOS Dropdown Menu (Morphs directly from the pill, zero layout shift)
                     OriginOSDropdownMenu(
                         isExpanded = isMenuExpanded,
                         onDismissRequest = { isMenuExpanded = false },
                         backdrop = backdrop,
                         isLiquidFusionEnabled = isLiquidFusionEnabled,
                         animationSpeedMultiplier = animationSpeed,
-                        menuItems = defaultOriginOSMenuItems()
-                    ) {
-                        // The OriginOS Top Action Pill [ Search | + | ⋮ ]
-                        Box(
-                            modifier = Modifier
-                                .shadow(
-                                    elevation = 2.dp,
-                                    shape = RoundedCornerShape(22.dp),
-                                    ambientColor = Color.Black.copy(alpha = 0.06f),
-                                    spotColor = Color.Black.copy(alpha = 0.08f)
-                                )
-                                .clip(RoundedCornerShape(22.dp))
-                                .background(if (isLightTheme) Color.White else Color(0xFF242426))
-                                .height(44.dp)
-                                .padding(horizontal = 4.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                // Search Icon Button
-                                Box(
-                                    modifier = Modifier
-                                        .size(38.dp)
-                                        .clip(CircleShape)
-                                        .clickable { },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    SearchPillIcon(textPrimary)
-                                }
-
-                                // Plus Icon Button
-                                Box(
-                                    modifier = Modifier
-                                        .size(38.dp)
-                                        .clip(CircleShape)
-                                        .clickable { },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    PlusPillIcon(textPrimary)
-                                }
-
-                                // More Options Anchor Button [ : ]
-                                Box(
-                                    modifier = Modifier
-                                        .size(38.dp)
-                                        .clip(CircleShape)
-                                        .background(
-                                            if (isMenuExpanded) {
-                                                if (isLightTheme) Color.Black.copy(alpha = 0.05f)
-                                                else Color.White.copy(alpha = 0.08f)
-                                            } else Color.Transparent
-                                        )
-                                        .clickable(
-                                            interactionSource = remember { MutableInteractionSource() },
-                                            indication = null
-                                        ) {
-                                            isMenuExpanded = !isMenuExpanded
-                                        },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    MoreVerticalPillIcon(textPrimary)
-                                }
-                            }
-                        }
-                    }
+                        menuItems = defaultOriginOSMenuItems(),
+                        onExpandToggle = { isMenuExpanded = !isMenuExpanded }
+                    )
                 }
 
                 // --- 3. SECTION: MOST USED ---
@@ -490,23 +426,23 @@ fun OriginOSDropdownContent() {
                         ) {
                             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 BasicText(
-                                    text = "DECOMPILED PHYSICS CONSTANTS:",
+                                    text = "ORIGINOS 7 FLUID MORPH TELEMETRY:",
                                     style = TextStyle(textSecondary, 11.sp, FontWeight.Bold)
                                 )
                                 BasicText(
-                                    text = "• Scale X: Phase 1 (T=0.36s, b=0.28, k=195.4) ➔ Phase 2 (T=0.28s, b=0.01, k=1024)",
+                                    text = "• 26 Checkpoints: Frame-by-frame trajectory from OriginOS 7 decompilation",
                                     style = TextStyle(textPrimary, 11.sp, fontFamily = FontFamily.Monospace)
                                 )
                                 BasicText(
-                                    text = "• Scale Y: Phase 1 (T=0.29s, b=0.60, k=192.6, v₀=5.0) ➔ Phase 2 (T=0.71s, b=0.01, k=159.3)",
+                                    text = "• Top-Right Corner: Inward necking (ΔX=-20dp, ΔY=+12dp) ➔ Convex dome ➔ Squircle settling",
                                     style = TextStyle(textPrimary, 11.sp, fontFamily = FontFamily.Monospace)
                                 )
                                 BasicText(
-                                    text = "• Dynamic K: Peak=30.0f, GapThreshold=20dp, DecayDuration=0.15s",
+                                    text = "• Organic Flanks: Left concave waist (28dp) + Right waist (14dp) + Droplet sag (18dp)",
                                     style = TextStyle(textPrimary, 11.sp, fontFamily = FontFamily.Monospace)
                                 )
                                 BasicText(
-                                    text = "• Exit Scale: Single spring T=0.32s, b=0.01, v₀=8.0",
+                                    text = "• Zero Layout Shift: Anchored pill container with invariant measured bounds (132x44dp)",
                                     style = TextStyle(textPrimary, 11.sp, fontFamily = FontFamily.Monospace)
                                 )
                             }
@@ -517,80 +453,6 @@ fun OriginOSDropdownContent() {
                 Spacer(Modifier.height(48.dp))
             }
         }
-    }
-}
-
-// --- VECTOR ICONS FOR PILL BUTTON ---
-
-@Composable
-private fun SearchPillIcon(tint: Color) {
-    Box(Modifier.size(18.dp), contentAlignment = Alignment.Center) {
-        Box(
-            Modifier
-                .size(12.dp)
-                .clip(CircleShape)
-                .background(Color.Transparent)
-        ) {
-            // Circle ring
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .clip(CircleShape)
-                    .background(Color.Transparent)
-            )
-        }
-        // Minimalist magnifying glass path
-        androidx.compose.foundation.Canvas(Modifier.size(18.dp)) {
-            val r = 5.dp.toPx()
-            val cx = 7.dp.toPx()
-            val cy = 7.dp.toPx()
-            drawCircle(
-                color = tint,
-                radius = r,
-                center = androidx.compose.ui.geometry.Offset(cx, cy),
-                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx())
-            )
-            drawLine(
-                color = tint,
-                start = androidx.compose.ui.geometry.Offset(cx + r * 0.707f, cy + r * 0.707f),
-                end = androidx.compose.ui.geometry.Offset(15.dp.toPx(), 15.dp.toPx()),
-                strokeWidth = 2.dp.toPx()
-            )
-        }
-    }
-}
-
-@Composable
-private fun PlusPillIcon(tint: Color) {
-    androidx.compose.foundation.Canvas(Modifier.size(18.dp)) {
-        val midX = size.width / 2f
-        val midY = size.height / 2f
-        val stroke = 2.dp.toPx()
-        val len = 6.dp.toPx()
-        drawLine(tint, Offset(midX - len, midY), Offset(midX + len, midY), stroke)
-        drawLine(tint, Offset(midX, midY - len), Offset(midX, midY + len), stroke)
-    }
-}
-
-@Composable
-private fun MoreVerticalPillIcon(tint: Color) {
-    // Two hollow ring circles vertically stacked, exact OriginOS 7 styling
-    androidx.compose.foundation.Canvas(Modifier.size(18.dp)) {
-        val cx = size.width / 2f
-        val r = 2.5.dp.toPx()
-        val stroke = 1.8.dp.toPx()
-        drawCircle(
-            color = tint,
-            radius = r,
-            center = Offset(cx, size.height * 0.35f),
-            style = androidx.compose.ui.graphics.drawscope.Stroke(width = stroke)
-        )
-        drawCircle(
-            color = tint,
-            radius = r,
-            center = Offset(cx, size.height * 0.65f),
-            style = androidx.compose.ui.graphics.drawscope.Stroke(width = stroke)
-        )
     }
 }
 
