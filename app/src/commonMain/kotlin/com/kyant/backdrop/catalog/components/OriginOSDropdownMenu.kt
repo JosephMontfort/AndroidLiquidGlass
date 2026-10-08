@@ -266,9 +266,9 @@ fun OriginOSLiquidMorphContainer(
                         if (backdrop != null && isGlassEnabled) {
                             Modifier.drawBackdrop(
                                 backdrop = backdrop,
-                                shape = shape,
+                                shape = { shape },
                                 effects = {
-                                    blur(16.dp)
+                                    blur(with(density) { 16.dp.toPx() })
                                     vivoLiquidGlass(
                                         size = Size(
                                             with(density) { curWidthDp.toPx() },

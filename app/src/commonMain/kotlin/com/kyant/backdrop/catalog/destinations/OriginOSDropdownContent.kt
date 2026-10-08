@@ -47,7 +47,7 @@ import com.kyant.backdrop.catalog.components.OriginOSLiquidMorphContainer
 import com.kyant.backdrop.catalog.components.OriginOSPillButton
 import com.kyant.backdrop.catalog.components.OriginOSMenuContent
 import com.kyant.backdrop.catalog.components.defaultOriginOSMenuItems
-import com.kyant.backdrop.layerBackdrop
+import com.kyant.backdrop.backdrops.layerBackdrop
 import org.jetbrains.compose.resources.painterResource
 
 @Composable
