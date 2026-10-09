@@ -38,17 +38,17 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import com.kyant.backdrop.catalog.components.OriginOSDropdownMenu
+import com.kyant.backdrop.catalog.components.OriginOSMorphPhase
+import com.kyant.backdrop.catalog.components.OriginOSPhysicsTelemetry
+import com.kyant.backdrop.catalog.components.defaultOriginOSMenuItems
 import glass.app.generated.resources.Res
 import glass.app.generated.resources.wallpaper_light
-import com.kyant.backdrop.catalog.components.OriginOSDropdownMenu
-import com.kyant.backdrop.catalog.components.OriginOSLiquidMorphContainer
-import com.kyant.backdrop.catalog.components.OriginOSPillButton
-import com.kyant.backdrop.catalog.components.OriginOSMenuContent
-import com.kyant.backdrop.catalog.components.defaultOriginOSMenuItems
-import com.kyant.backdrop.backdrops.layerBackdrop
 import org.jetbrains.compose.resources.painterResource
+import kotlin.math.roundToInt
 
 @Composable
 fun OriginOSDropdownContent() {
@@ -63,6 +63,7 @@ fun OriginOSDropdownContent() {
     var isMenuExpanded by remember { mutableStateOf(false) }
     var isGlassEnabled by remember { mutableStateOf(true) }
     var animationSpeed by remember { mutableFloatStateOf(1.0f) }
+    var telemetry by remember { mutableStateOf(OriginOSPhysicsTelemetry()) }
 
     Box(
         modifier = Modifier
@@ -123,6 +124,7 @@ fun OriginOSDropdownContent() {
                     isExpanded = isMenuExpanded,
                     speed = animationSpeed,
                     isGlass = isGlassEnabled,
+                    telemetry = telemetry,
                     onSpeedChange = { animationSpeed = it },
                     onGlassToggle = { isGlassEnabled = !isGlassEnabled },
                     onMenuToggle = { isMenuExpanded = !isMenuExpanded }
@@ -227,7 +229,8 @@ fun OriginOSDropdownContent() {
                     isGlassEnabled = isGlassEnabled,
                     animationSpeedMultiplier = animationSpeed,
                     menuItems = defaultOriginOSMenuItems(),
-                    onExpandToggle = { isMenuExpanded = !isMenuExpanded }
+                    onExpandToggle = { isMenuExpanded = !isMenuExpanded },
+                    onTelemetryUpdate = { telemetry = it }
                 )
             }
         }
@@ -278,6 +281,7 @@ private fun PhysicsTelemetryCard(
     isExpanded: Boolean,
     speed: Float,
     isGlass: Boolean,
+    telemetry: OriginOSPhysicsTelemetry,
     onSpeedChange: (Float) -> Unit,
     onGlassToggle: () -> Unit,
     onMenuToggle: () -> Unit
@@ -286,6 +290,16 @@ private fun PhysicsTelemetryCard(
     val textPrimary = if (isDark) Color.White else Color.Black
     val textSecondary = if (isDark) Color.White.copy(alpha = 0.7f) else Color.Black.copy(alpha = 0.7f)
     val cardColor = if (isDark) Color(0x99202024) else Color(0xCCFFFFFF)
+
+    val phaseBadgeColor = when (telemetry.phase) {
+        OriginOSMorphPhase.IDLE_COLLAPSED -> Color(0xFF8E8E93)
+        OriginOSMorphPhase.PINCH_TO_BUBBLE -> Color(0xFF007AFF)
+        OriginOSMorphPhase.DROPLET_FLIGHT -> Color(0xFFFF9500)
+        OriginOSMorphPhase.BLOOM_BOUNCE -> Color(0xFF34C759)
+        OriginOSMorphPhase.IDLE_EXPANDED -> Color(0xFF30D158)
+        OriginOSMorphPhase.COLLAPSE_BUBBLE -> Color(0xFFFF3B30)
+        OriginOSMorphPhase.UNPINCH_ANCHOR -> Color(0xFFAF52DE)
+    }
 
     Column(
         modifier = Modifier
@@ -322,9 +336,95 @@ private fun PhysicsTelemetryCard(
             }
         }
 
+        Spacer(Modifier.height(12.dp))
+
+        // Live Phase Status Badge
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .background(phaseBadgeColor.copy(alpha = 0.15f))
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(phaseBadgeColor)
+                )
+                BasicText(
+                    text = telemetry.phase.label,
+                    style = TextStyle(
+                        color = phaseBadgeColor,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace
+                    )
+                )
+            }
+
+            BasicText(
+                text = "${(telemetry.progressX * 100).roundToInt()}% / ${(telemetry.progressY * 100).roundToInt()}%",
+                style = TextStyle(
+                    color = phaseBadgeColor,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace
+                )
+            )
+        }
+
+        Spacer(Modifier.height(10.dp))
+
+        // Live Real-Time Telemetry Metrics
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(if (isDark) Color.Black.copy(alpha = 0.25f) else Color.Black.copy(alpha = 0.03f))
+                .padding(10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column {
+                BasicText(
+                    text = "DIMENSIONS",
+                    style = TextStyle(color = textSecondary, fontSize = 9.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                )
+                BasicText(
+                    text = "W: ${telemetry.widthDp.roundToInt()}dp  H: ${telemetry.heightDp.roundToInt()}dp",
+                    style = TextStyle(color = textPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Monospace)
+                )
+            }
+
+            Column {
+                BasicText(
+                    text = "CORNER RADIUS",
+                    style = TextStyle(color = textSecondary, fontSize = 9.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                )
+                BasicText(
+                    text = "R: ${telemetry.cornerRadiusDp.roundToInt()}dp",
+                    style = TextStyle(color = textPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Monospace)
+                )
+            }
+
+            Column {
+                BasicText(
+                    text = "CENTER (X, Y)",
+                    style = TextStyle(color = textSecondary, fontSize = 9.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                )
+                BasicText(
+                    text = "${telemetry.centerXDp.roundToInt()}dp, ${telemetry.centerYDp.roundToInt()}dp",
+                    style = TextStyle(color = textPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Monospace)
+                )
+            }
+        }
+
         Spacer(Modifier.height(14.dp))
 
-        // Speed Buttons
+        // Speed Buttons & Glass Toggle
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -397,19 +497,7 @@ private fun PhysicsTelemetryCard(
             )
             Spacer(Modifier.height(6.dp))
             BasicText(
-                text = "• Scale Y: T1=0.29s (b=0.60, v0=5.0) -> T2=0.71s (b=0.01)\n  Causes immediate vertical burst droplet illusion",
-                style = TextStyle(color = textPrimary, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
-            )
-            BasicText(
-                text = "• Scale X: T1=0.36s (b=0.28, v0=0.0) -> T2=0.28s (b=0.01)\n  Lags behind Y to preserve narrow elongated pill",
-                style = TextStyle(color = textPrimary, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
-            )
-            BasicText(
-                text = "• Translation Y: T1=0.32s (b=0.55, v0=8.0) -> T2=0.54s\n  Shoots downward directly from anchor center",
-                style = TextStyle(color = textPrimary, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
-            )
-            BasicText(
-                text = "• Vivo Liquid Glass: RERF_MAG=0.08 + Specular Rim Light\n  shader_liquid_glass_effect.agsl",
+                text = "• Phase 1: Pinch to 28dp circle bubble; dots converge 3.5dp->0dp\n• Phase 2: Scale Y (v0=5.0, b=0.60) & Trans Y (v0=8.0) droplet flight\n• Phase 3: Scale X (v0=0.0) blooms into 200dp squircle (R=28dp)\n• Shader: shader_liquid_glass_effect.agsl (RERF_MAG=0.08)",
                 style = TextStyle(color = textPrimary, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
             )
         }

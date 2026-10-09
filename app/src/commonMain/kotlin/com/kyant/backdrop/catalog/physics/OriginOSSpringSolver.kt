@@ -83,12 +83,13 @@ class OriginOSTwoPhaseSpring(
     fun evaluate(t: Float, startVal: Float, endVal: Float): Float {
         if (t <= 0f) return startVal
         val displacement = startVal - endVal
+        val velocitySign = if (startVal < endVal) 1.0f else -1.0f
 
         if (t <= crestTime) {
             // Phase 1 underdamped motion
             val decay = exp(-zeta1 * omegaN1 * t)
             val c1 = displacement
-            val c2 = (zeta1 * omegaN1 * displacement + startVelocity) / omegaD1
+            val c2 = (zeta1 * omegaN1 * displacement + startVelocity * velocitySign) / omegaD1
             val sinVal = sin(omegaD1 * t)
             val cosVal = cos(omegaD1 * t)
             return endVal + decay * (c1 * cosVal + c2 * sinVal)
@@ -96,7 +97,7 @@ class OriginOSTwoPhaseSpring(
             // State at crest time
             val decayCrest = exp(-zeta1 * omegaN1 * crestTime)
             val c1 = displacement
-            val c2 = (zeta1 * omegaN1 * displacement + startVelocity) / omegaD1
+            val c2 = (zeta1 * omegaN1 * displacement + startVelocity * velocitySign) / omegaD1
             val sinCrest = sin(omegaD1 * crestTime)
             val cosCrest = cos(omegaD1 * crestTime)
             val xCrest = endVal + decayCrest * (c1 * cosCrest + c2 * sinCrest)
@@ -138,9 +139,10 @@ class OriginOSSingleSpring(
         if (t >= estimatedDuration * 1.5f) return endVal
 
         val displacement = startVal - endVal
+        val velocitySign = if (startVal < endVal) 1.0f else -1.0f
         val decay = exp(-zeta * omegaN * t)
         val c1 = displacement
-        val c2 = if (omegaD > 0.001f) (zeta * omegaN * displacement + startVelocity) / omegaD else 0f
+        val c2 = if (omegaD > 0.001f) (zeta * omegaN * displacement + startVelocity * velocitySign) / omegaD else 0f
         val sinVal = sin(omegaD * t)
         val cosVal = cos(omegaD * t)
         return endVal + decay * (c1 * cosVal + c2 * sinVal)
